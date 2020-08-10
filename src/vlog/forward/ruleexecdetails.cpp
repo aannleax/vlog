@@ -37,17 +37,10 @@ void RuleExecutionDetails::rearrangeLiterals(std::vector<const Literal*> &vector
     vector.push_back(idxPointer);
     std::copy(subset2.begin(), subset2.end(), std::back_inserter(vector));
 
-    //assert(leftLiterals2.size() == 0);
     while (!leftLiterals2.empty()) {
         const Literal *lit = leftLiterals2.back();
         leftLiterals2.pop_back();
-
-        /*if (lit->getNVars() > 0) {
-          assert(false); //not supported
-          } else {*/
-        //just add it
         vector.push_back(lit);
-        //}
     }
 }
 
@@ -216,88 +209,6 @@ void RuleExecutionDetails::calculateNVarsInHeadFromEDB() {
     }
 }
 
-/*void RuleExecutionDetails::checkWhetherEDBsRedundantHead(RuleExecutionPlan &p,
-  const Literal &head) {
-//Check whether some EDBs can lead to redundant derivation
-for (int i = 0; i < p.plan.size(); ++i) {
-const Literal *literal = p.plan[i];
-if (literal->getPredicate().getType() != EDB) {
-continue;
-}
-
-std::vector<uint8_t> edbVars = literal->getAllVars();
-//Get all IDBs with the same predicate
-for (int j = 0; j < p.plan.size(); ++j) {
-if (i != j) {
-const Literal *body = p.plan[j];
-if (head.getPredicate().getId() == body->getPredicate().getId()) {
-//Do the two patterns share the same variables at the
-//same position?
-bool match = true;
-std::vector<std::pair<uint8_t, uint8_t>> positions;
-for (int l = 0; l < head.getTupleSize(); ++l) {
-VTerm headTerm = head.getTermAtPos(l);
-VTerm bodyTerm = body->getTermAtPos(l);
-if (headTerm.isVariable() && bodyTerm.isVariable()) {
-if (headTerm.getId() != bodyTerm.getId()) {
-bool found1 = false;
-bool found2 = false;
-for (std::vector<uint8_t>::iterator itr = edbVars.begin();
-itr != edbVars.end(); ++itr) {
-if (*itr == headTerm.getId()) {
-found1 = true;
-}
-if (*itr == bodyTerm.getId()) {
-found2 = true;
-}
-}
-
-if (found1 && found2) {
-//Add in positions the vars in the edb literal
-
-uint8_t pos1 = 255, pos2 = 255;
-for (uint8_t x = 0; x < literal->getTupleSize(); ++x) {
-if (literal->getTermAtPos(x).isVariable()) {
-if (literal->getTermAtPos(x).getId() == headTerm.getId())
-pos1 = x;
-if (literal->getTermAtPos(x).getId() == bodyTerm.getId())
-pos2 = x;
-}
-}
-assert(pos1 != 255 && pos2 != 255);
-if (pos1 > pos2) {
-positions.push_back(std::make_pair(pos2, pos1));
-} else {
-positions.push_back(std::make_pair(pos1, pos2));
-}
-} else {
-match = false;
-break; //Mismatch
-}
-}
-} else if (!headTerm.isVariable() && !bodyTerm.isVariable()) {
-if (headTerm.getValue() != bodyTerm.getValue()) {
-match = false;
-break; //Mismatch
-}
-} else {
-match = false;
-break;//Mismatch
-}
-}
-
-if (match && positions.size() > 0) {
-RuleExecutionPlan::MatchVariables r;
-r.posLiteralInOrder = (uint8_t) i;
-r.matches = positions;
-hv.matches.push_back(r);
-break;
-}
-}
-}
-}
-}
-}*/
 void RuleExecutionDetails::createExecutionPlans(
         std::vector<std::pair<size_t, size_t>> &ranges,
         bool copyAllVars) {
@@ -324,7 +235,7 @@ void RuleExecutionDetails::createExecutionPlans(
     }
 
     auto &heads = rule.getHeads();
-    p.calculateJoinsCoordinates(heads, copyAllVars);
+    p.calculateJoinsCoordinates(heads, rule.getFunctors(), copyAllVars);
     orderExecutions.push_back(p);
 }
 
@@ -391,10 +302,8 @@ void RuleExecutionDetails::createExecutionPlans(bool copyAllVars) {
                 p->checkIfFilteringHashMapIsPossible(heads[0]);
             }
 
-            //RuleExecutionDetails::checkWhetherEDBsRedundantHead(p, h);
-
             //Calculate all join coordinates
-            p->calculateJoinsCoordinates(heads, copyAllVars);
+            p->calculateJoinsCoordinates(heads, rule.getFunctors(), copyAllVars);
 
             //New version. Should be able to catch everything
             for (const auto& literal : p->plan) {
@@ -433,6 +342,6 @@ void RuleExecutionDetails::createExecutionPlans(bool copyAllVars) {
             RuleExecutionDetails::checkFilteringStrategy(
                     bodyLiterals[bodyLiterals.size() - 1], heads[0], *p);
         }
-        p->calculateJoinsCoordinates(heads, copyAllVars);
+        p->calculateJoinsCoordinates(heads, rule.getFunctors(), copyAllVars);
     }
 }

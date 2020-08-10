@@ -105,10 +105,12 @@ class SemiNaiver {
         void reorderPlan(RuleExecutionPlan &plan,
                 const std::vector<size_t> &cards,
                 const std::vector<Literal> &headLiteral,
+                const Var2Funct_t &functors,
                 bool copyAllVars);
 
         void reorderPlanForNegatedLiterals(RuleExecutionPlan &plan,
-                const std::vector<Literal> &heads);
+                const std::vector<Literal> &heads,
+                const Var2Funct_t &functors);
 
         bool executeRules(std::vector<RuleExecutionDetails> &allEDBRules,
                 std::vector<std::vector<RuleExecutionDetails>> &allIDBRules,

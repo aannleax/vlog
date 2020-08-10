@@ -370,7 +370,8 @@ class Rule {
     }
 
         Rule(uint32_t ruleId, Rule &r) : ruleId(ruleId),
-        heads(r.heads), body(r.body), _isRecursive(r._isRecursive),
+        heads(r.heads), body(r.body),
+        functors(r.functors), _isRecursive(r._isRecursive),
         existential(r.existential), egd(r.egd) {
         }
 

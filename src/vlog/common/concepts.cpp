@@ -480,6 +480,12 @@ bool Rule::doesVarAppearsInFollowingPatterns(int startingPattern, Var_t value) c
             }
         }
     }
+    for(const auto &f : functors) {
+        for(const auto &t : f.second.fArgs) {
+            if (t.getId() == value)
+                return true;
+        }
+    }
     return false;
 }
 
@@ -606,8 +612,17 @@ std::vector<Var_t> Rule::getVarsInHead(PredId_t ignore) const {
             }
         }
     }
+    for(const auto &f : functors) {
+        for(const auto &t : f.second.fArgs) {
+                if (std::find(headVars.begin(), headVars.end(),
+                            t.getId()) == headVars.end()){
+                    headVars.push_back(t.getId());
+                }
+        }
+    }
     return headVars;
 }
+
 std::vector<Var_t> Rule::getVarsInBody() const {
     std::vector<Var_t> bodyVars;
     for (const auto& literal : body) {

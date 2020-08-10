@@ -21,7 +21,6 @@ struct RuleExecutionDetails {
     std::vector<std::pair<uint8_t,
         std::vector<std::pair<uint8_t, uint8_t>>>> edbLiteralPerHeadVars;
 
-
     RuleExecutionDetails(Rule rule, size_t ruleid) : rule(rule), ruleid(ruleid) {}
 
     void createExecutionPlans(bool copyAllVars);
@@ -30,9 +29,6 @@ struct RuleExecutionDetails {
             bool copyAllVars);
 
     void calculateNVarsInHeadFromEDB();
-
-    //static void checkWhetherEDBsRedundantHead(RuleExecutionPlan &plan,
-    //        const Literal &head);
 
     static void checkFilteringStrategy(const Literal &lastLiteral,
             const Literal &head, RuleExecutionPlan &hv);

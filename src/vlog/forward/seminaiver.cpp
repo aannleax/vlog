@@ -1003,7 +1003,9 @@ void SemiNaiver::processRuleFirstAtom(const uint8_t nBodyLiterals,
  * @param plan:  &RuleExecutionPlan
  * @param heads: vector < Literal >
  * */
-void SemiNaiver::reorderPlanForNegatedLiterals(RuleExecutionPlan &plan, const std::vector<Literal> &heads) {
+void SemiNaiver::reorderPlanForNegatedLiterals(RuleExecutionPlan &plan,
+        const std::vector<Literal> &heads,
+        const Var2Funct_t &functors) {
     std::set<Var_t> bounded_vars;
     std::vector<uint8_t> literal_indexes;
     std::vector<uint8_t> new_order;
@@ -1051,12 +1053,13 @@ void SemiNaiver::reorderPlanForNegatedLiterals(RuleExecutionPlan &plan, const st
         }
 
     if(toReorder)
-        plan = plan.reorder(new_order, heads, checkCyclicTerms);
+        plan = plan.reorder(new_order, heads, functors, checkCyclicTerms);
 }
 
 void SemiNaiver::reorderPlan(RuleExecutionPlan &plan,
         const std::vector<size_t> &cards,
         const std::vector<Literal> &heads,
+        const Var2Funct_t &functors,
         bool copyAllVars) {
     //Reorder the atoms in terms of cardinality.
     std::vector<std::pair<uint8_t, size_t>> positionCards;
@@ -1117,7 +1120,7 @@ void SemiNaiver::reorderPlan(RuleExecutionPlan &plan,
             LOG(DEBUGL) << "Reordered plan is " << (int)adaptedPosCards[i].first;
             orderLiterals.push_back(adaptedPosCards[i].first);
         }
-        plan = plan.reorder(orderLiterals, heads, copyAllVars);
+        plan = plan.reorder(orderLiterals, heads, functors, copyAllVars);
     }
 }
 
@@ -1222,9 +1225,9 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
         }
 
         //Reorder the list of atoms depending on the observed cardinalities
-        reorderPlan(plan, cards, heads, checkCyclicTerms);
+        reorderPlan(plan, cards, heads, rule.getFunctors(), checkCyclicTerms);
         //Reorder for input negation (can we merge these two?)
-        reorderPlanForNegatedLiterals(plan, heads);
+        reorderPlanForNegatedLiterals(plan, heads, rule.getFunctors());
 
 #ifdef DEBUG
         std::string listLiterals = "EXEC COMB: ";

@@ -44,6 +44,9 @@ struct RuleExecutionPlan {
     //they are linked to
     //any variable in the body. I need it to construct function terms.
     std::map<Var_t, std::vector<uint8_t>> extvars2posFromSecond;
+    //The following map is similar to the previous data structure but it records
+    //the dependencies about the functors
+    std::map<Var_t, std::vector<uint8_t>> functvars2posFromSecond;
 
     //The sequence of body literals to evaluate
     std::vector<const Literal*> plan;
@@ -58,11 +61,14 @@ struct RuleExecutionPlan {
     //The second parameter is needed because there are cases when we need to
     //remember all variables, even the ones not used in the head. One such case
     //is the RMFA
-    void calculateJoinsCoordinates(const std::vector<Literal> &heads,
+    void calculateJoinsCoordinates(
+            const std::vector<Literal> &heads,
+            const Var2Funct_t &functors,
             bool copyAllVars);
 
     RuleExecutionPlan reorder(std::vector<uint8_t> &order,
             const std::vector<Literal> &heads,
+            const Var2Funct_t &functors,
             bool copyAllVars) const;
 
 };

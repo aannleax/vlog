@@ -41,7 +41,8 @@ void RuleExecutionPlan::checkIfFilteringHashMapIsPossible(const Literal &head) {
 }
 
 RuleExecutionPlan RuleExecutionPlan::reorder(std::vector<uint8_t> &order,
-        const std::vector<Literal> &heads, bool copyAllVars) const {
+        const std::vector<Literal> &heads,
+        const Var2Funct_t &functors, bool copyAllVars) const {
     RuleExecutionPlan newPlan;
     newPlan.lastLiteralSharesWithHead = false;
     newPlan.filterLastHashMap = false;
@@ -56,11 +57,13 @@ RuleExecutionPlan RuleExecutionPlan::reorder(std::vector<uint8_t> &order,
                 heads[0], newPlan);
         newPlan.checkIfFilteringHashMapIsPossible(heads[0]);
     }
-    newPlan.calculateJoinsCoordinates(heads, copyAllVars);
+    newPlan.calculateJoinsCoordinates(heads, functors, copyAllVars);
     return newPlan;
 }
 
-void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &heads,
+void RuleExecutionPlan::calculateJoinsCoordinates(
+        const std::vector<Literal> &heads,
+        const Var2Funct_t &functors,
         bool copyAllVars) {
     std::vector<Var_t> existingVariables;
 
@@ -76,6 +79,15 @@ void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &he
             }
         }
         countVars += headLiteral.getTupleSize();
+    }
+
+    std::set<Var_t> varFunctorArgs;
+    for(const auto &f : functors) {
+        for(const auto &t: f.second.fArgs) {
+            if (t.isVariable()) {
+                varFunctorArgs.insert(t.getId());
+            }
+        }
     }
 
     for (uint8_t i = 0; i < plan.size(); ++i) {
@@ -96,6 +108,8 @@ void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &he
                     for (auto &el : p->second) {
                         pf.push_back(std::make_pair(el, m));
                     }
+                } else if (varFunctorArgs.count(existingVariables[m])) {
+                    pf.push_back(std::make_pair((uint8_t)-1, m));
                 }
             }
         } else {
@@ -111,7 +125,9 @@ void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &he
                     }
                 }
                 //Can be used in the head or as dependency for the chase
-                isVarNeeded = isVarNeeded || variablesNeededForHead.count(existingVariables[j]);
+                isVarNeeded = isVarNeeded ||
+                    variablesNeededForHead.count(existingVariables[j]) ||
+                    varFunctorArgs.count(existingVariables[j]);
 
                 if (isVarNeeded || copyAllVars) {
                     // Maps from the new position to the old.
@@ -201,7 +217,6 @@ void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &he
 
         if (i == plan.size() - 1) {
             //TODO this code can be simplified.
-            //output.sizeOutputRelation.push_back((uint8_t) headLiteral.getTupleSize());
             sizeOutputRelation.push_back(~0);
 
             //Calculate the positions of the dependencies for the chase
@@ -241,6 +256,44 @@ void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &he
                 }
             }
             extvars2posFromSecond = extvars2pos;
+
+            //Calculate the positions of the dependencies for the functors
+            std::map<Var_t, std::vector<uint8_t>> functvars2pos;
+            for(const auto &f : functors) {
+                for(const auto &term : f.second.fArgs) {
+                    if (term.isVariable()) {
+                        auto var = term.getId();
+                        bool found = false;
+                        for(int j = 0; j < existingVariables.size(); ++j) {
+                            if (existingVariables[j] == var) {
+                                functvars2pos[var].push_back(j);
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        //Then search among the last literal
+                        if (!found) {
+                            int litVars = 0;
+                            for (int x = 0; x < currentLiteral->getTupleSize(); ++x) {
+                                const VTerm t = currentLiteral->getTermAtPos(x);
+                                if (t.isVariable()) {
+                                    if (t.getId() == var) {
+                                        functvars2pos[var].push_back(
+                                                existingVariables.size() + litVars);
+                                        found = true;
+                                        break;
+                                    }
+                                    litVars++;
+                                }
+                            }
+                        }
+
+                    }
+                }
+            }
+            functvars2posFromSecond = functvars2pos;
+
         } else {
             existingVariables = newExistingVariables;
             sizeOutputRelation.push_back(existingVariables.size());
@@ -250,4 +303,3 @@ void RuleExecutionPlan::calculateJoinsCoordinates(const std::vector<Literal> &he
         posFromSecond.push_back(ps);
     }
 }
-

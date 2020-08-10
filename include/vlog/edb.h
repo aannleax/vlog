@@ -217,7 +217,7 @@ class EDBLayer {
                     } else if (table.type == "MDLITE") {
                         addMDLiteTable(table);
 #endif
-                    } else if (table.type == "INMEMORY") {
+                    } else if (table.type == "INMEMORY" || table.type == "CSV") {
                         addInmemoryTable(table);
 #ifdef SPARQL
                     } else if (table.type == "SPARQL") {

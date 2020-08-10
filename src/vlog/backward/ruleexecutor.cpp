@@ -73,7 +73,7 @@ void RuleExecutor::calculateJoinsSizeIntermediateRelations() {
 
     for (size_t j = 0; j < body.size(); ++j) {
         Literal literal = body.at(j);
-        uint8_t adornmentLiteral = literal.getPredicate().getAdorment();
+        uint8_t adornmentLiteral = literal.getPredicate().getAdornment();
         std::vector<Var_t> currentSignature;
         std::vector<int> posToSupplRel;
         std::vector<std::pair<uint8_t, uint8_t>> boundFromLiteral;

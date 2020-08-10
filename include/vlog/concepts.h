@@ -20,10 +20,9 @@
 #define IDB 1
 #define MAX_NPREDS (2048*1024)
 
-#define Funct_t std::vector<std::pair<uint32_t, std::vector<uint32_t>>>
-
 typedef uint32_t PredId_t;
 typedef uint32_t Var_t;
+typedef std::vector<std::pair<uint32_t, std::vector<uint32_t>>> Funct_t;
 
 class EDBLayer;
 

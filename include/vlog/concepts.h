@@ -22,7 +22,20 @@
 
 typedef uint32_t PredId_t;
 typedef uint32_t Var_t;
-typedef std::vector<std::pair<uint32_t, std::vector<uint32_t>>> Funct_t;
+
+typedef struct {
+    uint32_t fId;
+    std::string fName;
+    uint8_t nargs;
+} Functor_t;
+
+class VTerm;
+typedef struct {
+    uint32_t fId;
+    std::vector<VTerm> fArgs;
+} FunctVars_t;
+
+typedef std::vector<std::pair<Var_t, FunctVars_t>> Var2Funct_t;
 
 class EDBLayer;
 
@@ -331,10 +344,10 @@ class Rule {
         const uint32_t ruleId;
         const std::vector<Literal> heads;
         const std::vector<Literal> body;
+        const Var2Funct_t functors;
         const bool _isRecursive;
         const bool existential;
         const bool egd;
-        const Funct_t functors;
 
         static bool checkRecursion(const std::vector<Literal> &head,
                 const std::vector<Literal> &body);
@@ -344,14 +357,14 @@ class Rule {
 
         Rule(uint32_t ruleId, const std::vector<Literal> heads,
                 std::vector<Literal> body, bool egd,
-                Funct_t functors) :
+                Var2Funct_t functors) :
             ruleId(ruleId),
             heads(heads),
             body(body),
+            functors(functors),
             _isRecursive(checkRecursion(heads, body)),
             existential(!getExistentialVariables().empty()),
-            egd(egd),
-            functors(functors)
+            egd(egd)
     {
         checkRule();
     }
@@ -371,7 +384,7 @@ class Rule {
             return !functors.empty();
         }
 
-        const Funct_t &getFunctors() const {
+        const Var2Funct_t &getFunctors() const {
             return functors;
         }
 
@@ -475,7 +488,14 @@ class Program {
         Dictionary dictPredicates;
         std::unordered_map<PredId_t, uint8_t> cardPredicates;
 
+        Dictionary dictFunctors;
+        std::unordered_map<uint32_t, Functor_t> mapFunctors; //fId to name, etc.
+
         void rewriteRule(std::vector<Literal> &heads, std::vector<Literal> &body);
+
+        std::vector<VTerm> parseTuple(std::string tuple,
+                Dictionary &dictVariables,
+                Var2Funct_t &functors);
 
         void addRule(Rule &rule);
 
@@ -502,7 +522,12 @@ class Program {
 
         VLIBEXP std::vector<PredId_t> getAllPredicateIDs() const;
 
-        VLIBEXP Literal parseLiteral(std::string literal, Dictionary &dictVariables);
+        VLIBEXP Literal parseLiteral(std::string literal,
+                Dictionary &dictVariables,
+                Var2Funct_t &functors);
+
+        VLIBEXP Literal parseLiteral(std::string literal,
+                Dictionary &dictVariables);
 
         VLIBEXP std::string readFromFile(std::string pathFile, bool rewriteMultihead = false);
 
@@ -547,12 +572,12 @@ class Program {
 
         VLIBEXP void addRule(std::vector<Literal> heads,
                 std::vector<Literal> body) {
-            addRule(heads, body, false, false, Funct_t());
+            addRule(heads, body, false, false, Var2Funct_t());
         }
 
         VLIBEXP void addRule(std::vector<Literal> heads,
                 std::vector<Literal> body, bool rewriteMultihead, bool isEGD,
-                Funct_t fuctors);
+                Var2Funct_t fuctors);
 
         void addAllRules(std::vector<Rule> &rules);
 

@@ -370,7 +370,7 @@ bool Checker::RMSA(Program &originalProgram) {
     auxBody.push_back(Literal(specialPred, t));
     std::vector<Literal> auxHead;
     auxHead.push_back(Literal(specialPredTrans, t));
-    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false, Funct_t()));
+    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false, Var2Funct_t()));
     //S_TRANS(X,Z) :- S_TRANS(X,Y),S(Y,Z)
     auxBody.clear();
     auxBody.push_back(Literal(specialPredTrans, t));
@@ -381,7 +381,7 @@ bool Checker::RMSA(Program &originalProgram) {
     t.set(VTerm(1, 0), 0);
     t.set(VTerm(3, 0), 1);
     auxHead.push_back(Literal(specialPredTrans, t));
-    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false, Funct_t()));
+    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false, Var2Funct_t()));
 
     Program rewrittenPrg = programWithCritical.clone();
     rewrittenPrg.cleanAllRules();

@@ -623,14 +623,24 @@ std::vector<Var_t> Rule::getVarsInBody() const {
 /* Check if every variable in the head appears in the body
  * @returns a list of unique existentially quantified variable_ids
  */
-std::vector<Var_t> Rule::getExistentialVariables() const{
+std::vector<Var_t> Rule::getExistentialVariables() const {
     std::vector<Var_t> out;
     std::vector<Var_t> bodyVars = getVarsInBody();
     for(const auto& head : heads) {
         for(auto var : head.getAllVars()) {
             //Does var appear in the body?
             if (std::find(bodyVars.begin(),bodyVars.end(),var) == bodyVars.end()){
-                out.push_back(var);
+                //The variable should not be a functor either
+                bool found = false;
+                for(const auto &f : functors) {
+                    if (f.first == var) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    out.push_back(var);
+                }
             }
         }
     }
@@ -1088,7 +1098,165 @@ std::string Program::prettifyName(std::string input) {
     return input;
 }
 
-Literal Program::parseLiteral(std::string l, Dictionary &dictVariables) {
+std::string parseTerm(std::string tuple, size_t &end) {
+    size_t start = 0;
+    //Remove spaces or comma
+    while (start < tuple.size()) {
+        char c = tuple[start];
+        if (c != ' ' && c != ',')
+            break;
+        start++;
+    }
+    size_t posTerm = start;
+    size_t openBrackets = 0;
+    size_t closedBrackets = 0;
+    while (posTerm < tuple.size()) {
+        if (openBrackets == closedBrackets &&
+                (tuple[posTerm] == ',' || tuple[posTerm] == ')')) {
+            break;
+        }
+        switch(tuple[posTerm]) {
+            case '\'':
+                posTerm++;
+                while (posTerm < tuple.size()) {
+                    if (tuple[posTerm] == '\\') {
+                        posTerm++;
+                        if (posTerm != tuple.size()) {
+                            posTerm++;
+                        }
+                        continue;
+                    }
+                    if (tuple[posTerm] == '\'') {
+                        // Index must be incremented here, because otherwise
+                        // we have to deal with this quote in next iteration
+                        posTerm++;
+                        break;
+                    }
+                    posTerm++;
+                }
+                break;
+            case '\"':
+                posTerm++;
+                while (posTerm < tuple.size()) {
+                    if (tuple[posTerm] == '\\') {
+                        posTerm++;
+                        if (posTerm != tuple.size()) {
+                            posTerm++;
+                        }
+                        continue;
+                    }
+                    if (tuple[posTerm] == '\"') {
+                        // Index must be incremented here, because otherwise
+                        // we have to deal with this quote in next iteration
+                        posTerm++;
+                        break;
+                    }
+                    posTerm++;
+                }
+                break;
+            case '<':
+                posTerm++;
+                while (posTerm < tuple.size()) {
+                    if (tuple[posTerm] == '\\') {
+                        posTerm++;
+                        if (posTerm != tuple.size()) {
+                            posTerm++;
+                        }
+                        continue;
+                    }
+                    if (tuple[posTerm] == '>') {
+                        break;
+                    }
+                    posTerm++;
+                }
+                break;
+            case '(':
+                openBrackets++;
+                posTerm++;
+                break;
+            case ')':
+                closedBrackets++;
+                posTerm++;
+                break;
+            default:
+                posTerm++;
+                break;
+        }
+    }
+    end = posTerm;
+    return tuple.substr(start, posTerm - start);
+}
+
+std::vector<VTerm> Program::parseTuple(std::string tuple,
+        Dictionary &dictVariables,
+        Var2Funct_t &functors) {
+    std::vector<VTerm> t;
+    while (true) {
+        size_t end = 0;
+        std::string term = parseTerm(tuple, end);
+        if (term == "")
+            break;
+        tuple = tuple.substr(end, std::string::npos);
+        LOG(DEBUGL) << "Found term \"" << term << "\"";
+        //Process the term
+        if (std::isupper(term.at(0))) {
+            uint64_t v = dictVariables.getOrAdd(term);
+            if (v != (Var_t) v) {
+                throw "Too many variables in rule (> 255)";
+            }
+            t.push_back(VTerm((Var_t) v, 0));
+            //Is it a functor? I decide depending on whether there are '(' and ')'
+            if (term.find('(') != std::string::npos &&
+                    term.find(')') != std::string::npos) {
+                //Get functor name
+                auto start = term.find('(');
+                auto end = term.find(')');
+                std::string fName = term.substr(0, start);
+                //Get functor args
+                std::vector<VTerm> fArgs = parseTuple(
+                        term.substr(start + 1, end - start - 1), dictVariables,
+                        functors);
+                //Create the functor
+                uint32_t fId = dictFunctors.getOrAdd(fName);
+                if (!mapFunctors.count(fId)) {
+                    Functor_t f;
+                    f.fId = fId;
+                    f.fName = fName;
+                    f.nargs = fArgs.size();
+                    mapFunctors.insert(std::make_pair(fId, f));
+                } else {
+                    auto &f = mapFunctors[fId];
+                    if (f.nargs != fArgs.size()) {
+                        LOG(ERRORL) << "Inconsistency! The functor "
+                            << fName << " has nargs " << fArgs.size()
+                            << " and " << f.nargs;
+                        throw 10;
+                    }
+                }
+                //Create var2funct for the rule
+                FunctVars_t argsId;
+                argsId.fId = fId;
+                argsId.fArgs = fArgs;
+                functors.push_back(std::make_pair(v, argsId));
+            }
+        } else {
+            //Constant
+            term = rewriteRDFOWLConstants(term);
+            uint64_t dictTerm;
+            if (!kb->getOrAddDictNumber(term.c_str(), term.size(), dictTerm)) {
+                //Get an ID from the temporary dictionary
+                //dictTerm = additionalConstants.getOrAdd(term);
+                throw 10; //Could not add a term? Why?
+            }
+            t.push_back(VTerm(0, dictTerm));
+        }
+    }
+    return t;
+}
+
+Literal Program::parseLiteral(std::string l,
+        Dictionary &dictVariables,
+        Var2Funct_t &functors) {
     size_t posBeginTuple = l.find("(");
     bool negated = false;
     if (posBeginTuple == std::string::npos) {
@@ -1108,110 +1276,13 @@ Literal Program::parseLiteral(std::string l, Dictionary &dictVariables) {
     LOG(DEBUGL) << "Found predicate \"" << predicate  << "\"";
 
     //Calculate the tuple
-    std::vector<VTerm> t;
-    std::string term;
-    while (tuple.size() > 0) {
-        size_t posTerm = 0;
-        while (posTerm < tuple.size()) {
-            if (tuple[posTerm] == ',' || tuple[posTerm] == ')') {
-                break;
-            }
-            switch(tuple[posTerm]) {
-                case '\'':
-                    posTerm++;
-                    while (posTerm < tuple.size()) {
-                        if (tuple[posTerm] == '\\') {
-                            posTerm++;
-                            if (posTerm != tuple.size()) {
-                                posTerm++;
-                            }
-                            continue;
-                        }
-                        if (tuple[posTerm] == '\'') {
-                            // Index must be incremented here, because otherwise
-                            // we have to deal with this quote in next iteration
-                            posTerm++;
-                            break;
-                        }
-                        posTerm++;
-                    }
-                    break;
-                case '\"':
-                    posTerm++;
-                    while (posTerm < tuple.size()) {
-                        if (tuple[posTerm] == '\\') {
-                            posTerm++;
-                            if (posTerm != tuple.size()) {
-                                posTerm++;
-                            }
-                            continue;
-                        }
-                        if (tuple[posTerm] == '\"') {
-                            // Index must be incremented here, because otherwise
-                            // we have to deal with this quote in next iteration
-                            posTerm++;
-                            break;
-                        }
-                        posTerm++;
-                    }
-                    break;
-                case '<':
-                    posTerm++;
-                    while (posTerm < tuple.size()) {
-                        if (tuple[posTerm] == '\\') {
-                            posTerm++;
-                            if (posTerm != tuple.size()) {
-                                posTerm++;
-                            }
-                            continue;
-                        }
-                        if (tuple[posTerm] == '>') {
-                            break;
-                        }
-                        posTerm++;
-                    }
-                    break;
-                default:
-                    posTerm++;
-                    break;
-            }
-        }
-        if (posTerm != tuple.size()) {
-            term = tuple.substr(0, posTerm);
-            tuple = trim(tuple.substr(posTerm + 1, tuple.size()));
-        } else {
-            term = tuple;
-            tuple = "";
-        }
-
-        LOG(DEBUGL) << "Found term \"" << term << "\"";
-
-        //Parse the term
-        if (std::isupper(term.at(0))) {
-            uint64_t v = dictVariables.getOrAdd(term);
-            if (v != (Var_t) v) {
-                throw "Too many variables in rule (> 255)";
-            }
-            t.push_back(VTerm((Var_t) v, 0));
-        } else {
-            //Constant
-            term = rewriteRDFOWLConstants(term);
-            uint64_t dictTerm;
-            if (!kb->getOrAddDictNumber(term.c_str(), term.size(), dictTerm)) {
-                //Get an ID from the temporary dictionary
-                //dictTerm = additionalConstants.getOrAdd(term);
-                throw 10; //Could not add a term? Why?
-            }
-
-            t.push_back(VTerm(0, dictTerm));
-        }
-    }
+    std::vector<VTerm> t = parseTuple(tuple, dictVariables, functors);
 
     if (t.size() != (uint8_t) t.size()) {
         throw "Arity of predicate " + predicate + " is too high (" + std::to_string(t.size()) + " > 255)";
     }
 
-    VTuple t1((uint8_t) t.size());
+    VTuple t1(t.size());
     int pos = 0;
     for (std::vector<VTerm>::iterator itr = t.begin(); itr != t.end(); ++itr) {
         t1.set(*itr, pos++);
@@ -1247,6 +1318,17 @@ Literal Program::parseLiteral(std::string l, Dictionary &dictVariables) {
 
     Literal literal(pred, t1, negated);
     return literal;
+}
+
+Literal Program::parseLiteral(std::string literal,
+        Dictionary &dictVariables) {
+    Var2Funct_t functors;
+    auto out = parseLiteral(literal, dictVariables, functors);
+    if (!functors.empty()) {
+        LOG(ERRORL) << "Method used incorrectly. Functors will be ignored!";
+        throw 10;
+    }
+    return out;
 }
 
 PredId_t Program::getPredicateID(const std::string & p, const uint8_t card) {
@@ -1302,7 +1384,7 @@ void Program::addRule(Rule &rule) {
 
 void Program::addRule(std::vector<Literal> heads, std::vector<Literal> body,
         bool rewriteMultihead, bool isEGD,
-        Funct_t functors) {
+        Var2Funct_t functors) {
     if (rewriteMultihead && heads.size() > 1) {
         rewriteRule(heads, body);
     } else {
@@ -1342,24 +1424,59 @@ int Program::getNIDBPredicates() const {
 }
 
 size_t findEndLiteral(std::string s) {
-    size_t pos = s.find("),");
-    size_t oldpos = 0;
-    while (pos != std::string::npos) {
-        LOG(DEBUGL) << "string: " << s << ",found pos " << pos;
-        int count = 0;
-        for (int i = oldpos; i < pos; i++) {
-            if (s[i] == '"') {
-                count++;
-            }
+    /*size_t pos = s.find("),");
+      size_t oldpos = 0;
+      while (pos != std::string::npos) {
+      LOG(DEBUGL) << "string: " << s << ",found pos " << pos;
+      int count = 0;
+      for (int i = oldpos; i < pos; i++) {
+      if (s[i] == '"') {
+      count++;
+      }
+      }
+      LOG(DEBUGL) << "quote count = " << count;
+      if (count % 2 == 0) {
+      return pos;
+      }
+      oldpos = pos;
+      pos = s.find("),", oldpos+2);
+      }
+      return pos;*/
+    size_t openBrackets = 0;
+    size_t closedBrackets = 0;
+    size_t countQuotes = 0;
+    size_t pos = 0;
+    while ((countQuotes % 2 != 0 || openBrackets == 0 ||
+                openBrackets != closedBrackets) && pos < s.size()) {
+        char c = s[pos];
+        switch (c) {
+            case '"':
+                countQuotes++;
+                break;
+            case '(':
+                openBrackets++;
+                break;
+            case ')':
+                closedBrackets++;
+                break;
+            default:
+                break;
         }
-        LOG(DEBUGL) << "quote count = " << count;
-        if (count % 2 == 0) {
-            return pos;
-        }
-        oldpos = pos;
-        pos = s.find("),", oldpos+2);
+        pos++;
     }
     return pos;
+}
+
+std::string getNextLiteral(std::string s) {
+    size_t pos = 0;
+    while (pos < s.size()) {
+        char c = s[pos];
+        if (c != ' ' && c != ',') {
+            break;
+        }
+        pos++;
+    }
+    return s.substr(pos, std::string::npos);
 }
 
 std::string Program::parseRule(std::string rule, bool rewriteMultihead) {
@@ -1370,22 +1487,17 @@ std::string Program::parseRule(std::string rule, bool rewriteMultihead) {
         if (posEndHead == std::string::npos) {
             throw "Missing ':-'";
         }
+        Var2Funct_t headFunctors;
         //process the head(s)
         std::string head = trim(rule.substr(0, posEndHead));
         std::vector<Literal> lHeads;
         LOG(DEBUGL) << "head = \"" << head << "\"";
         while (head.size() > 0) {
-            std::string headLiteral;
             size_t posEndLiteral = findEndLiteral(head);
-            if (posEndLiteral != std::string::npos) {
-                headLiteral = trim(head.substr(0, posEndLiteral + 1));
-                head = trim(head.substr(posEndLiteral + 2, std::string::npos));
-            } else {
-                headLiteral = head;
-                head = "";
-            }
-            LOG(DEBUGL) << "headliteral = \"" << headLiteral << "\"";
-            Literal h = parseLiteral(headLiteral, dictVariables);
+            std::string headLiteral = trim(head.substr(0, posEndLiteral));
+            head = getNextLiteral(head.substr(posEndLiteral, std::string::npos));
+
+            Literal h = parseLiteral(headLiteral, dictVariables, headFunctors);
             if (h.isNegated()) {
                 throw "head literal cannot be negated";
             }
@@ -1400,18 +1512,18 @@ std::string Program::parseRule(std::string rule, bool rewriteMultihead) {
         std::string body = trim(rule.substr(posEndHead+2, std::string::npos));
         LOG(DEBUGL) << "body = \"" << body << "\"";
         std::vector<Literal> lBody;
+        Var2Funct_t bodyFunctors;
         while (body.size() > 0) {
-            std::string bodyLiteral;
             size_t posEndLiteral = findEndLiteral(body);
-            if (posEndLiteral != std::string::npos) {
-                bodyLiteral = trim(body.substr(0, posEndLiteral + 1));
-                body = trim(body.substr(posEndLiteral + 2, std::string::npos));
-            } else {
-                bodyLiteral = body;
-                body = "";
-            }
+            std::string bodyLiteral = trim(body.substr(0, posEndLiteral));
+            body = getNextLiteral(body.substr(posEndLiteral, std::string::npos));
             LOG(DEBUGL) << "bodyliteral = \"" << bodyLiteral << "\"";
-            lBody.push_back(parseLiteral(bodyLiteral, dictVariables));
+            lBody.push_back(parseLiteral(bodyLiteral, dictVariables, bodyFunctors));
+            if (!bodyFunctors.empty()) {
+                LOG(ERRORL) << "Functors in the body are not supported";
+                LOG(ERRORL) << "See rule " << rule;
+                throw 10;
+            }
         }
 
         //Add the rule
@@ -1419,12 +1531,12 @@ std::string Program::parseRule(std::string rule, bool rewriteMultihead) {
         if (lHeads.size() == 1) {
             auto predId = lHeads[0].getPredicate().getId();
             std::string rawValue = dictPredicates.getRawValue(predId);
-            if (rawValue == "owl::sameAs" || rawValue == "<http://www.w3.org/2002/07/owl#sameAs>")
+            if (rawValue == "owl::sameAs" ||
+                    rawValue == "<http://www.w3.org/2002/07/owl#sameAs>")
                 isEGD = true;
         }
-        //FIXME!
-        throw 10;
-        addRule(lHeads, lBody, rewriteMultihead, isEGD, Funct_t());
+
+        addRule(lHeads, lBody, rewriteMultihead, isEGD, headFunctors);
         return "";
     } catch (std::string e) {
         return "Failed parsing rule '" + rule + "': " + e;

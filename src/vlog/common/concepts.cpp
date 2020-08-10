@@ -385,9 +385,9 @@ std::vector<uint8_t> Literal::getNewVars(std::vector<uint8_t> &vars) const {
         if (t.isVariable() &&
                 std::find(vars.begin(), vars.end(), t.getId()) == vars.end() &&
                 std::find(output.begin(), output.end(), t.getId()) == output.end()) {
-                output.push_back(t.getId());
-            }
+            output.push_back(t.getId());
         }
+    }
     return output;
 }
 
@@ -398,7 +398,7 @@ static std::vector<uint8_t> getAllVars(std::vector<Literal> &lits) {
             VTerm t = lit.getTermAtPos(i);
             if (t.isVariable() &&
                     std::find(output.begin(), output.end(), t.getId()) == output.end()) {
-                    output.push_back(t.getId());
+                output.push_back(t.getId());
             }
         }
     }
@@ -411,9 +411,9 @@ std::vector<uint8_t> Literal::getAllVars() const {
         VTerm t = getTermAtPos(i);
         if (t.isVariable() &&
                 std::find(output.begin(), output.end(), t.getId()) == output.end()) {
-                output.push_back(t.getId());
-            }
+            output.push_back(t.getId());
         }
+    }
     return output;
 }
 
@@ -514,7 +514,11 @@ Rule Rule::normalizeVars() const {
             ++itr) {
         newBody.push_back(itr->substitutes(subs));
     }
-    return Rule(ruleId, newheads, newBody, egd);
+    if (!functors.empty()) {
+        //I should also normalize the functors, for now this is not implemented
+        throw 10;
+    }
+    return Rule(ruleId, newheads, newBody, egd, functors);
 }
 
 Rule Rule::createAdornment(uint8_t headAdornment) const {
@@ -588,7 +592,7 @@ Rule Rule::createAdornment(uint8_t headAdornment) const {
     }
     std::vector<Literal> newHeads;
     newHeads.push_back(newHead);
-    return Rule(ruleId, newHeads, newBody, egd);
+    return Rule(ruleId, newHeads, newBody, egd, functors);
 }
 
 std::vector<uint8_t> Rule::getVarsInHead(PredId_t ignore) const {
@@ -658,9 +662,9 @@ std::map<uint8_t, std::vector<uint8_t>> Rule::calculateDependencies() const {
     for (const auto& extVar : getExistentialVariables()){
         for (const auto& frontierVar : frontierVars) {
             if ((itr = dependenciesExtVars.find(extVar)) != dependenciesExtVars.end()){
-               if (std::find(itr->second.begin(), itr->second.end(), frontierVar) == itr->second.end()) {
-                   itr->second.push_back(frontierVar);
-               }
+                if (std::find(itr->second.begin(), itr->second.end(), frontierVar) == itr->second.end()) {
+                    itr->second.push_back(frontierVar);
+                }
             } else {
                 dependenciesExtVars[extVar].push_back(frontierVar);
             }
@@ -730,7 +734,7 @@ void Program::singulariseEquality() {
             //Replace the head of the rule with the new predicate
             std::vector<Literal> head;
             head.push_back(Literal(mySameAsPred, r.getHeads()[0].getTuple()));
-            addRule(head, r.getBody(), false, false);
+            addRule(head, r.getBody(), false, false, r.getFunctors());
         } else {
             //First get the largest var ID used in the rule
             uint8_t largestVarID = 0;
@@ -1297,11 +1301,12 @@ void Program::addRule(Rule &rule) {
 }
 
 void Program::addRule(std::vector<Literal> heads, std::vector<Literal> body,
-        bool rewriteMultihead, bool isEGD) {
+        bool rewriteMultihead, bool isEGD,
+        Funct_t functors) {
     if (rewriteMultihead && heads.size() > 1) {
         rewriteRule(heads, body);
     } else {
-        Rule rule(allrules.size(), heads, body, isEGD);
+        Rule rule(allrules.size(), heads, body, isEGD, functors);
         addRule(rule);
     }
 }
@@ -1417,7 +1422,9 @@ std::string Program::parseRule(std::string rule, bool rewriteMultihead) {
             if (rawValue == "owl::sameAs" || rawValue == "<http://www.w3.org/2002/07/owl#sameAs>")
                 isEGD = true;
         }
-        addRule(lHeads, lBody, rewriteMultihead, isEGD);
+        //FIXME!
+        throw 10;
+        addRule(lHeads, lBody, rewriteMultihead, isEGD, Funct_t());
         return "";
     } catch (std::string e) {
         return "Failed parsing rule '" + rule + "': " + e;

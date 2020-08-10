@@ -424,7 +424,8 @@ void Materialization::rewriteLiteralInProgram(Literal & prematLiteral, Literal &
         }
 
         if (toBeAdded)
-            rewrittenRules.push_back(Rule(r.getId(), r.getHeads(), newBody, r.isEGD()));
+            rewrittenRules.push_back(Rule(r.getId(), r.getHeads(),
+                        newBody, r.isEGD(), r.getFunctors()));
     }
 
     p.cleanAllRules();

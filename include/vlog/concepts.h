@@ -20,6 +20,8 @@
 #define IDB 1
 #define MAX_NPREDS (2048*1024)
 
+#define Funct_t std::vector<std::pair<uint32_t, std::vector<uint32_t>>>
+
 typedef uint32_t PredId_t;
 
 class EDBLayer;
@@ -140,24 +142,6 @@ class VTuple {
             return false;
         }
 
-        /*
-           VTuple & operator=(const VTuple &v) {
-           if (this == &v) {
-           return *this;
-           }
-           if (terms != NULL) {
-           delete[] terms;
-           }
-           sizetuple = v.sizetuple;
-           terms = new VTerm[sizetuple];
-           for (int i = 0; i < sizetuple; i++) {
-           terms[i] = v.terms[i];
-           }
-           return *this;
-           }
-           */
-        //L. Can I create an iterator on it? begin, end etc?
-
         ~VTuple() {
             delete[] terms;
         }
@@ -218,10 +202,6 @@ class Predicate {
         uint8_t getCardinality() const {
             return card;
         }
-
-        /*static bool isEDB(std::string pred) {
-          return pred.at(pred.size() - 1) == 'E';
-          }*/
 
         static uint8_t calculateAdornment(VTuple &t) {
             uint8_t adornment = 0;
@@ -354,6 +334,7 @@ class Rule {
         const bool _isRecursive;
         const bool existential;
         const bool egd;
+        const Funct_t functors;
 
         static bool checkRecursion(const std::vector<Literal> &head,
                 const std::vector<Literal> &body);
@@ -362,15 +343,18 @@ class Rule {
         bool doesVarAppearsInFollowingPatterns(int startingPattern, uint8_t value) const;
 
         Rule(uint32_t ruleId, const std::vector<Literal> heads,
-                std::vector<Literal> body, bool egd) :
+                std::vector<Literal> body, bool egd,
+                Funct_t functors) :
             ruleId(ruleId),
             heads(heads),
             body(body),
             _isRecursive(checkRecursion(heads, body)),
             existential(!getExistentialVariables().empty()),
-            egd(egd) {
-                checkRule();
-            }
+            egd(egd),
+            functors(functors)
+    {
+        checkRule();
+    }
 
         Rule(uint32_t ruleId, Rule &r) : ruleId(ruleId),
         heads(r.heads), body(r.body), _isRecursive(r._isRecursive),
@@ -381,6 +365,14 @@ class Rule {
 
         bool isRecursive() const {
             return this->_isRecursive;
+        }
+
+        bool hasFunctors() const {
+            return !functors.empty();
+        }
+
+        const Funct_t &getFunctors() const {
+            return functors;
         }
 
         uint32_t getId() const {
@@ -396,8 +388,6 @@ class Rule {
         }
 
         Literal getFirstHead() const {
-            // if (heads.size() > 1)
-            //     LOG(WARNL) << "This method should be called only if we handle multiple heads properly...";
             return heads[0];
         }
 
@@ -557,11 +547,12 @@ class Program {
 
         VLIBEXP void addRule(std::vector<Literal> heads,
                 std::vector<Literal> body) {
-            addRule(heads, body, false, false);
+            addRule(heads, body, false, false, Funct_t());
         }
 
         VLIBEXP void addRule(std::vector<Literal> heads,
-                std::vector<Literal> body, bool rewriteMultihead, bool isEGD);
+                std::vector<Literal> body, bool rewriteMultihead, bool isEGD,
+                Funct_t fuctors);
 
         void addAllRules(std::vector<Rule> &rules);
 

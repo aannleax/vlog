@@ -347,7 +347,11 @@ bool Checker::RMSA(Program &originalProgram) {
             for (auto &head : heads) {
                 newHeads.push_back(head);
             }
-            newRules.push_back(Rule(rule.getId(), newHeads, rule.getBody(), rule.isEGD()));
+            newRules.push_back(Rule(rule.getId(),
+                        newHeads,
+                        rule.getBody(),
+                        rule.isEGD(),
+                        rule.getFunctors()));
         } else {
             newRules.push_back(rule);
         }
@@ -366,7 +370,7 @@ bool Checker::RMSA(Program &originalProgram) {
     auxBody.push_back(Literal(specialPred, t));
     std::vector<Literal> auxHead;
     auxHead.push_back(Literal(specialPredTrans, t));
-    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false));
+    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false, Funct_t()));
     //S_TRANS(X,Z) :- S_TRANS(X,Y),S(Y,Z)
     auxBody.clear();
     auxBody.push_back(Literal(specialPredTrans, t));
@@ -377,7 +381,7 @@ bool Checker::RMSA(Program &originalProgram) {
     t.set(VTerm(1, 0), 0);
     t.set(VTerm(3, 0), 1);
     auxHead.push_back(Literal(specialPredTrans, t));
-    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false));
+    newRules.push_back(Rule(ruleCounter++, auxHead, auxBody, false, Funct_t()));
 
     Program rewrittenPrg = programWithCritical.clone();
     rewrittenPrg.cleanAllRules();
@@ -394,7 +398,7 @@ bool Checker::RMSA(Program &originalProgram) {
     sn->checkAcyclicity(-1, specialPredId); //run(0, 1, NULL);
 
     if (sn->isFoundCyclicTerms()) {
-	return false;
+        return false;
     }
 
     //Parse the content of the special relation. If we find a cycle, then we stop

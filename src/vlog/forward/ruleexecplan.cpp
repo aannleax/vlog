@@ -109,7 +109,7 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                         pf.push_back(std::make_pair(el, m));
                     }
                 } else if (varFunctorArgs.count(existingVariables[m])) {
-                    pf.push_back(std::make_pair((uint8_t)-1, m));
+                    pf.push_back(std::make_pair(~0, m));
                 }
             }
         } else {
@@ -131,7 +131,8 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
 
                 if (isVarNeeded || copyAllVars) {
                     // Maps from the new position to the old.
-                    // add to pf the pair [idx_in_newExistingVariables, idx_in_existingVariables]
+                    // add to pf the pair [idx_in_newExistingVariables,
+                    // idx_in_existingVariables]
                     pf.push_back(std::make_pair(newExistingVariables.size(), j));
                     // add to newExistingVariables the existingVariable[j]
                     newExistingVariables.push_back(existingVariables[j]);
@@ -181,32 +182,41 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                     }
 
                     //Check the head or chase-related dependencies
-                    isVariableNeeded = isVariableNeeded || variablesNeededForHead.count(t.getId());
+                    isVariableNeeded = isVariableNeeded ||
+                        variablesNeededForHead.count(t.getId()) ||
+                        varFunctorArgs.count(t.getId());
 
                     if (i == (plan.size() - 1)) {
                         if (isVariableNeeded) {
-                            // Here, the variable can only be needed if it occurs in the head.
-                            // The "ps" map in this case maps from the head position to
-                            // the variable number in the pattern.
-                            if (!varSoFar.count(t.getId())) {
-                                auto p = variablesNeededForHead.find(t.getId());
-                                for(auto &el : p->second) {
-                                    ps.push_back(std::make_pair(el, litVars));
+                            if (variablesNeededForHead.count(t.getId())) {
+                                // Here, the variable can only be needed if it occurs in the head.
+                                // The "ps" map in this case maps from the head position to
+                                // the variable number in the pattern.
+                                if (!varSoFar.count(t.getId())) {
+                                    auto p = variablesNeededForHead.find(t.getId());
+                                    for(auto &el : p->second) {
+                                        ps.push_back(std::make_pair(el, litVars));
+                                    }
+                                    varSoFar.insert(t.getId());
                                 }
-                                varSoFar.insert(t.getId());
+                            } else if (varFunctorArgs.count(t.getId())) {
+                                ps.push_back(std::make_pair(~0, litVars));
+                            } else {
+                                LOG(ERRORL) << "Should not happen";
+                                throw 10;
                             }
                         }
                         v2p.push_back(std::make_pair(x, newExistingVariables.size() + litVars));
                     } else if (isVariableNeeded || copyAllVars) {
                         //Add it to the next list of bindings if it is not already present
-                        std::vector<Var_t>::iterator iter2 = std::find(newExistingVariables.begin(), newExistingVariables.end(), t.getId());
+                        std::vector<Var_t>::iterator iter2 =
+                            std::find(newExistingVariables.begin(), newExistingVariables.end(), t.getId());
                         if (iter2 != newExistingVariables.end()){ //found
-                            v2p.push_back(std::make_pair(x, (Var_t)(iter2 - newExistingVariables.begin())));
+                            v2p.push_back(std::make_pair(x, iter2 - newExistingVariables.begin()));
                         } else {
                             ps.push_back(std::make_pair(newExistingVariables.size(), litVars));
                             v2p.push_back(std::make_pair(x, newExistingVariables.size()));
                             newExistingVariables.push_back(t.getId());
-                            LOG(TRACEL) << "New variable: " << (int) t.getId();
                         }
                     }
                 }
@@ -258,15 +268,18 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
             extvars2posFromSecond = extvars2pos;
 
             //Calculate the positions of the dependencies for the functors
-            std::map<Var_t, std::vector<uint8_t>> functvars2pos;
+            std::vector<std::pair<Var_t, FunctorIdAndPos_t>> functvars2pos;
             for(const auto &f : functors) {
+                FunctorIdAndPos_t posAndId;
+                posAndId.fId = f.second.fId;
                 for(const auto &term : f.second.fArgs) {
+
                     if (term.isVariable()) {
                         auto var = term.getId();
                         bool found = false;
                         for(int j = 0; j < existingVariables.size(); ++j) {
                             if (existingVariables[j] == var) {
-                                functvars2pos[var].push_back(j);
+                                posAndId.pos.push_back(j);
                                 found = true;
                                 break;
                             }
@@ -279,8 +292,9 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                                 const VTerm t = currentLiteral->getTermAtPos(x);
                                 if (t.isVariable()) {
                                     if (t.getId() == var) {
-                                        functvars2pos[var].push_back(
-                                                existingVariables.size() + litVars);
+                                        posAndId.pos.push_back(
+                                                existingVariables.size() +
+                                                litVars);
                                         found = true;
                                         break;
                                     }
@@ -288,9 +302,9 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                                 }
                             }
                         }
-
                     }
                 }
+                functvars2pos.push_back(std::make_pair(f.first, posAndId));
             }
             functvars2posFromSecond = functvars2pos;
 

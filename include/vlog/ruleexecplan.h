@@ -46,7 +46,7 @@ struct RuleExecutionPlan {
     std::map<Var_t, std::vector<uint8_t>> extvars2posFromSecond;
     //The following map is similar to the previous data structure but it records
     //the dependencies about the functors
-    std::map<Var_t, std::vector<uint8_t>> functvars2posFromSecond;
+    std::vector<std::pair<Var_t, FunctorIdAndPos_t>> functvars2posFromSecond;
 
     //The sequence of body literals to evaluate
     std::vector<const Literal*> plan;

@@ -187,16 +187,6 @@ bool SingleHeadFinalRuleProcessor::isEmpty() const {
     return true;
 }
 
-/*uint32_t SingleHeadFinalRuleProcessor::getRowsInBlock(const int blockId,
-  const bool unique) const {
-  if (!unique) {
-  return tmpt[blockId] == NULL ? 0 : tmpt[blockId]->getNRows();
-  } else {
-  return utmpt[blockId] == NULL ? 0 : utmpt[blockId]->getNRows();
-  }
-
-  }*/
-
 void SingleHeadFinalRuleProcessor::addColumns(const int blockid,
         std::vector<std::shared_ptr<Column>> &columns,
         const bool unique, const bool sorted) {
@@ -217,131 +207,90 @@ void SingleHeadFinalRuleProcessor::addColumns(const int blockid,
 #endif
 }
 
-void SingleHeadFinalRuleProcessor::addColumns(const int blockid,
-        FCInternalTableItr *itr, const bool unique,
-        const bool sorted, const bool lastInsert) {
+void SingleHeadFinalRuleProcessor::addColumns_protected(
+        const int blockid,
+        std::vector<std::shared_ptr<Column>> c,
+        const bool unique,
+        const bool sorted,
+        const bool lastInsert)
+{
     enlargeBuffers(blockid + 1);
+    if (c.size() < rowsize) {
+        assert(lastInsert); //If it is not the last insert, the size
+        //of the columns can change. I must address this case. For
+        //now, I catch it.
+
+        //The head contains also constants. We must add fields in the vector
+        // of created columns.
+        std::vector<std::shared_ptr<Column>> newc;
+        int idxVar = 0;
+        for (int i = 0; i < rowsize; ++i) {
+            if (!literal.getTermAtPos(i).isVariable()) {
+                newc.push_back(std::shared_ptr<Column>(
+                            new CompressedColumn(row[i],
+                                c.size() == 0 ? 1 : c[0]->size())));
+            } else {
+                newc.push_back(c[idxVar++]);
+            }
+        }
+        c = newc;
+    }
+
     if (unique || ignoreDupElimin) { //I am sure that the results are unique...
         if (utmpt[blockid] == NULL) {
             utmpt[blockid] = new SegmentInserter(rowsize);
         }
-
-        uint8_t columns[256];
-        for (uint32_t i = 0; i < nCopyFromSecond; ++i) {
-            columns[i] = posFromSecond[i].second;
-        }
-        std::vector<std::shared_ptr<Column>> c =
-            itr->getColumn(nCopyFromSecond,
-                    columns);
-        if (rowsize == 0) {
-            assert(c.size() == 0);
-            return;
-        }
-        if (nCopyFromSecond > 1) {
-            std::vector<std::shared_ptr<Column>> c2;
-            int rowID = 0;
-            int largest = -1;
-            for (int i = 0; i < nCopyFromSecond; ++i) {
-                //Get the row with the smallest ID
-                int minID = INT_MAX;
-                for (int j = 0; j <  nCopyFromSecond; ++j) {
-                    if (posFromSecond[j].first > largest &&
-                            posFromSecond[j].first < minID) {
-                        rowID = j;
-                        minID = posFromSecond[j].first;
-                    }
-                }
-                c2.push_back(c[rowID]);
-                largest = posFromSecond[rowID].first;
-            }
-            assert(c2.size() == c.size());
-            c = c2;
-        }
-
-        if (c.size() < rowsize) {
-            assert(lastInsert); //If it is not the last insert, the size
-            //of the columns can change. I must address this case. For
-            //now, I catch it.
-
-            //The head contains also constants. We must add fields in the vector
-            // of created columns.
-            std::vector<std::shared_ptr<Column>> newc;
-            int idxVar = 0;
-            for (int i = 0; i < rowsize; ++i) {
-                if (!literal.getTermAtPos(i).isVariable()) {
-                    newc.push_back(std::shared_ptr<Column>(
-                                new CompressedColumn(row[i],
-                                    c.size() == 0 ? 1 : c[0]->size())));
-                } else {
-                    newc.push_back(c[idxVar++]);
-                }
-            }
-            c = newc;
-        }
         utmpt[blockid]->addColumns(c, sorted, lastInsert);
-
     } else {
         //There might be duplicates...
-
         if (tmpt[blockid] == NULL) {
             tmpt[blockid] = new SegmentInserter(rowsize);
         }
-
-        uint8_t columns[256];
-        for (uint32_t i = 0; i < nCopyFromSecond; ++i) {
-            columns[i] = posFromSecond[i].second;
-        }
-        std::vector<std::shared_ptr<Column>> c =
-            itr->getColumn(nCopyFromSecond,
-                    columns);
-        assert(c.size() <= rowsize);
-        if (rowsize == 0) {
-            return;
-        }
-
-        if (nCopyFromSecond > 1) {
-            std::vector<std::shared_ptr<Column>> c2;
-            int rowID = 0;
-            int largest = -1;
-            for (int i = 0; i < nCopyFromSecond; ++i) {
-                //Get the row with the smallest ID
-                int minID = INT_MAX;
-                for (int j = 0; j <  nCopyFromSecond; ++j) {
-                    if (posFromSecond[j].first > largest &&
-                            posFromSecond[j].first < minID) {
-                        rowID = j;
-                        minID = posFromSecond[j].first;
-                    }
-                }
-                c2.push_back(c[rowID]);
-                largest = posFromSecond[rowID].first;
-            }
-            assert(c2.size() == c.size());
-            c = c2;
-        }
-
-        if (c.size() < rowsize) {
-            //The head contains also constants. We must add fields in the vector
-            // of created columns.
-            std::vector<std::shared_ptr<Column>> newc;
-            int idxVar = 0;
-            for (int i = 0; i < rowsize; ++i) {
-                if (!literal.getTermAtPos(i).isVariable()) {
-                    newc.push_back(std::shared_ptr<Column>(
-                                new CompressedColumn(row[i],
-                                    c.size() == 0 ? 1 : c[0]->size())));
-                } else {
-                    newc.push_back(c[idxVar++]);
-                }
-            }
-            c = newc;
-        }
-
         tmpt[blockid]->addColumns(c, sorted, lastInsert);
     }
 #if DEBUG
     checkSizes();
 #endif
+
+}
+
+void SingleHeadFinalRuleProcessor::addColumns(const int blockid,
+        FCInternalTableItr *itr, const bool unique,
+        const bool sorted, const bool lastInsert) {
+    uint8_t columns[256];
+    for (uint32_t i = 0; i < nCopyFromSecond; ++i) {
+        columns[i] = posFromSecond[i].second;
+    }
+    std::vector<std::shared_ptr<Column>> c =
+        itr->getColumn(nCopyFromSecond,
+                columns);
+    if (rowsize == 0) {
+        assert(c.size() == 0);
+        return;
+    }
+
+    if (nCopyFromSecond > 1) {
+        std::vector<std::shared_ptr<Column>> c2;
+        int rowID = 0;
+        int largest = -1;
+        for (int i = 0; i < nCopyFromSecond; ++i) {
+            //Get the row with the smallest ID
+            int minID = INT_MAX;
+            for (int j = 0; j <  nCopyFromSecond; ++j) {
+                if (posFromSecond[j].first > largest &&
+                        posFromSecond[j].first < minID) {
+                    rowID = j;
+                    minID = posFromSecond[j].first;
+                }
+            }
+            c2.push_back(c[rowID]);
+            largest = posFromSecond[rowID].first;
+        }
+        assert(c2.size() == c.size());
+        c = c2;
+    }
+
+    addColumns_protected(blockid, c, unique, sorted, lastInsert);
 }
 
 void SingleHeadFinalRuleProcessor::addColumn(const int blockid,
@@ -592,23 +541,6 @@ bool SingleHeadFinalRuleProcessor::consolidate(const bool isFinished,
                                 seg));
 
 
-#if 0
-                    FCInternalTableItr *test = ptrTable->getIterator();
-                    int ncols = test->getNColumns();
-                    while (test->hasNext()) {
-                        test->next();
-                        std::string s = "";
-                        for (int i = 0; i < ncols; i++) {
-                            Term_t t = test->getCurrentValue(i);
-                            if (i > 0) {
-                                s += ", ";
-                            }
-                            s += std::to_string(t);
-                        }
-                        LOG(DEBUGL) << "Tuple(tmpt): <" << s << ">";
-                    }
-                    ptrTable->releaseIterator(test);
-#endif
                     t->add(ptrTable, literal, posLiteralInRule, ruleDetails, ruleExecOrder,
                             iteration, isFinished, nthreads);
 

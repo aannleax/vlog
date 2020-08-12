@@ -56,7 +56,7 @@ ExistentialRuleProcessor::ExistentialRuleProcessor(
                         }
                         posExtColumns[term.getId()].push_back(count);
                     } else {
-                        if (! isPresent(term.getId(),varsUsedForExt)) {
+                        if (!isPresent(term.getId(),varsUsedForExt)) {
                             varsUsedForExt.push_back(term.getId());
                             colsForExt.push_back(count);
                         }
@@ -528,15 +528,10 @@ void ExistentialRuleProcessor::addColumn(const int blockid, const uint8_t pos,
     throw 10;
 }
 
-void ExistentialRuleProcessor::addColumns(const int blockid,
-        FCInternalTableItr *itr, const bool unique,
-        const bool sorted, const bool lastInsert) {
-    if (nCopyFromFirst > 0) {
-        LOG(ERRORL) << "This method is not supposed to work if other columns"
-            " from outside the itr";
-        throw 10;
-    }
-    std::vector<std::shared_ptr<Column>> c = itr->getAllColumns();
+void ExistentialRuleProcessor::addColumns_protected(const int blockid,
+        std::vector<std::shared_ptr<Column>> &c,
+        const bool unique, const bool sorted)
+{
     uint64_t sizecolumns = 0;
     if (c.size() > 0) {
         sizecolumns = c[0]->size();
@@ -726,6 +721,19 @@ void ExistentialRuleProcessor::addColumns(const int blockid,
         t->addColumns(blockid, c2, unique, sorted);
         count += sizeTuple;
     }
+}
+
+void ExistentialRuleProcessor::addColumns(const int blockid,
+        FCInternalTableItr *itr, const bool unique,
+        const bool sorted, const bool lastInsert) {
+    if (nCopyFromFirst > 0) {
+        LOG(ERRORL) << "This method is not supposed to work if other columns"
+            " from outside the itr";
+        throw 10;
+    }
+    assert(lastInsert); //I'm not sure I handle the case where lastInsert=false
+    std::vector<std::shared_ptr<Column>> c = itr->getAllColumns();
+    addColumns_protected(blockid, c, unique, sorted);
 }
 
 std::vector<uint64_t> ExistentialRuleProcessor::blocked_check_computeBodyAtoms(
@@ -1195,16 +1203,6 @@ bool ExistentialRuleProcessor::consolidate(const bool isFinished) {
                 allColumns[pos] = extcolumn;
             }
         }
-        /*        LOG(DEBUGL) << "N. rows " << nrows;
-                  for(int i = 0; i < allColumns.size(); ++i) {
-                  auto reader = allColumns[i]->getReader();
-                  for(int j = 0; j < 10; ++j) {
-                  reader->hasNext();
-                  auto v = reader->next();
-                  cout << v << "\t";
-                  }
-                  cout << std::endl;
-                  }*/
 
         //Add the columns to the head atoms
         int count = 0;

@@ -23,6 +23,8 @@
 typedef uint32_t PredId_t;
 typedef uint32_t Var_t;
 
+/*** MAX FUNCTOR ARGS ***/
+#define MAX_FUNCTOR_NARGS 128
 typedef struct {
     uint32_t fId;
     std::string fName;
@@ -34,6 +36,11 @@ typedef struct {
     uint32_t fId;
     std::vector<VTerm> fArgs;
 } FunctVars_t;
+
+typedef struct {
+    uint32_t fId;
+    std::vector<uint8_t> pos;
+} FunctorIdAndPos_t;
 
 typedef std::vector<std::pair<Var_t, FunctVars_t>> Var2Funct_t;
 
@@ -623,6 +630,10 @@ class Program {
         VLIBEXP void axiomatizeEquality();
 
         VLIBEXP void singulariseEquality();
+
+        const std::unordered_map<uint32_t, Functor_t> &getFunctors() const {
+            return mapFunctors;
+        }
 
         ~Program() {
         }

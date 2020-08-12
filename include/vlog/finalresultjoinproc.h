@@ -31,6 +31,13 @@ class SingleHeadFinalRuleProcessor: public ResultJoinProcessor {
 
         void enlargeBuffers(const int newsize);
 
+        void addColumns_protected(
+                const int blockid,
+                std::vector<std::shared_ptr<Column>> c,
+                const bool unique,
+                const bool sorted,
+                const bool lastInsert);
+
     public:
         SingleHeadFinalRuleProcessor(
                 std::vector<std::pair<uint8_t, uint8_t>> &posFromFirst,

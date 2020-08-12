@@ -7,6 +7,8 @@
 #include <vlog/finalresultjoinproc.h>
 #include <vlog/extresultjoinproc.h>
 #include <vlog/egdresultjoinproc.h>
+#include <vlog/functextresultjoinproc.h>
+#include <vlog/functresultjoinproc.h>
 #include <vlog/utils.h>
 #include <trident/model/table.h>
 #include <kognac/consts.h>
@@ -58,7 +60,7 @@ void SemiNaiver::createGraphRuleDependency(std::vector<int> &nodes,
                 }
             }
         }
-     }
+    }
     delete[] definedBy;
 }
 
@@ -110,6 +112,7 @@ SemiNaiver::SemiNaiver(EDBLayer &layer,
         predicatesTables.resize(program->getMaxPredicateId());
         ignoreDuplicatesElimination = false;
         TableFilterer::setOptIntersect(opt_intersect);
+        functors.init(program);
 
         if (! program->stratify(stratification, nStratificationClasses)) {
             LOG(ERRORL) << "Program could not be stratified";
@@ -1290,39 +1293,68 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
                             ignoreDuplicatesElimination,
                             UNA,
                             checkCyclicTerms && typeChase == TypeChase::SKOLEM_CHASE);
-
                 } else if (ruleDetails.rule.isExistential()) {
-                    joinOutput = new ExistentialRuleProcessor(
-                            plan.posFromFirst[optimalOrderIdx],
-                            plan.posFromSecond[optimalOrderIdx],
-                            listDerivations,
-                            heads, &ruleDetails,
-                            (uint8_t) orderExecution, iteration,
-                            finalResultContainer == NULL,
-                            !multithreaded ? -1 : nthreads,
-                            this,
-                            chaseMgmt,
-                            chaseMgmt->hasRuleToCheck(),
-                            ignoreDuplicatesElimination);
-
+                    if (ruleDetails.rule.hasFunctors()) {
+                        joinOutput = new FunctExtRuleProcessor(
+                                plan.posFromFirst[optimalOrderIdx],
+                                plan.posFromSecond[optimalOrderIdx],
+                                listDerivations,
+                                heads, &ruleDetails,
+                                (uint8_t) orderExecution, iteration,
+                                finalResultContainer == NULL,
+                                !multithreaded ? -1 : nthreads,
+                                this,
+                                chaseMgmt,
+                                chaseMgmt->hasRuleToCheck(),
+                                ignoreDuplicatesElimination);
+                    } else {
+                        joinOutput = new ExistentialRuleProcessor(
+                                plan.posFromFirst[optimalOrderIdx],
+                                plan.posFromSecond[optimalOrderIdx],
+                                listDerivations,
+                                heads, &ruleDetails,
+                                (uint8_t) orderExecution, iteration,
+                                finalResultContainer == NULL,
+                                !multithreaded ? -1 : nthreads,
+                                this,
+                                chaseMgmt,
+                                chaseMgmt->hasRuleToCheck(),
+                                ignoreDuplicatesElimination);
+                    }
                 } else {
                     if (heads.size() == 1) {
                         FCTable *table = getTable(heads[0].getPredicate().getId(),
                                 heads[0].getPredicate().getCardinality());
-                        joinOutput = new SingleHeadFinalRuleProcessor(
-                                plan.posFromFirst[optimalOrderIdx],
-                                plan.posFromSecond[optimalOrderIdx],
-                                listDerivations,
-                                table,
-                                heads[0],
-                                0,
-                                &ruleDetails,
-                                (uint8_t) orderExecution,
-                                iteration,
-                                finalResultContainer == NULL,
-                                !multithreaded ? -1 : nthreads,
-                                ignoreDuplicatesElimination);
-
+                        if (ruleDetails.rule.hasFunctors()) {
+                            joinOutput = new FunctRuleProcessor(
+                                    this,
+                                    plan.posFromFirst[optimalOrderIdx],
+                                    plan.posFromSecond[optimalOrderIdx],
+                                    listDerivations,
+                                    table,
+                                    heads[0],
+                                    0,
+                                    &ruleDetails,
+                                    (uint8_t) orderExecution,
+                                    iteration,
+                                    finalResultContainer == NULL,
+                                    !multithreaded ? -1 : nthreads,
+                                    ignoreDuplicatesElimination);
+                        } else {
+                            joinOutput = new SingleHeadFinalRuleProcessor(
+                                    plan.posFromFirst[optimalOrderIdx],
+                                    plan.posFromSecond[optimalOrderIdx],
+                                    listDerivations,
+                                    table,
+                                    heads[0],
+                                    0,
+                                    &ruleDetails,
+                                    (uint8_t) orderExecution,
+                                    iteration,
+                                    finalResultContainer == NULL,
+                                    !multithreaded ? -1 : nthreads,
+                                    ignoreDuplicatesElimination);
+                        }
                     } else {
                         joinOutput = new FinalRuleProcessor(
                                 plan.posFromFirst[optimalOrderIdx],

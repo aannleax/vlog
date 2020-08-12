@@ -614,10 +614,10 @@ std::vector<Var_t> Rule::getVarsInHead(PredId_t ignore) const {
     }
     for(const auto &f : functors) {
         for(const auto &t : f.second.fArgs) {
-                if (std::find(headVars.begin(), headVars.end(),
-                            t.getId()) == headVars.end()){
-                    headVars.push_back(t.getId());
-                }
+            if (std::find(headVars.begin(), headVars.end(),
+                        t.getId()) == headVars.end()){
+                headVars.push_back(t.getId());
+            }
         }
     }
     return headVars;
@@ -1238,6 +1238,11 @@ std::vector<VTerm> Program::parseTuple(std::string tuple,
                     f.fId = fId;
                     f.fName = fName;
                     f.nargs = fArgs.size();
+                    if (f.nargs > MAX_FUNCTOR_NARGS) {
+                        LOG(ERRORL) << "A functor can have at most " <<
+                            MAX_FUNCTOR_NARGS;
+                        throw 10;
+                    }
                     mapFunctors.insert(std::make_pair(fId, f));
                 } else {
                     auto &f = mapFunctors[fId];

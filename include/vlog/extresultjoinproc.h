@@ -1,5 +1,5 @@
 #ifndef _EXT_RESULT_H
-#define _EXT_RESULT_Hresultjoinproc
+#define _EXT_RESULT_H
 
 #include <vlog/finalresultjoinproc.h>
 #include <vlog/resultjoinproc.h>
@@ -63,6 +63,11 @@ class ExistentialRuleProcessor : public FinalRuleProcessor {
                 std::vector<Literal> &input,
                 Program *p,
                 EDBLayer *l);
+
+    protected:
+        void addColumns_protected(const int blockid,
+                std::vector<std::shared_ptr<Column>> &columns,
+                const bool unique, const bool sorted);
 
     public:
         ExistentialRuleProcessor(

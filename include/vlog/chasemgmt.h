@@ -52,7 +52,7 @@ struct hash_ChaseRow {
 };
 
 class ChaseMgmt {
-    private:
+    public:
         class Rows {
             private:
                 const uint64_t startCounter;
@@ -95,6 +95,7 @@ class ChaseMgmt {
                 bool checkRecursive(uint64_t target, uint64_t value,
                         std::set<uint64_t> &toCheck);
         };
+    private:
 
         class RuleContainer {
             private:

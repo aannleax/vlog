@@ -8,6 +8,7 @@
 #include <vlog/ruleexecdetails.h>
 #include <vlog/chasemgmt.h>
 #include <vlog/consts.h>
+#include <vlog/functormap.h>
 
 #include <trident/model/table.h>
 
@@ -61,6 +62,8 @@ class SemiNaiver {
         Program *RMFC_program;
         std::string sameasAlgo;
         const bool UNA;
+
+        FunctorMap functors;
 
 #ifdef WEBINTERFACE
         long statsLastIteration;
@@ -207,6 +210,11 @@ class SemiNaiver {
 
         bool opt_inter() {
             return opt_intersect;
+        }
+
+        FunctorMap &getFunctorMap()
+        {
+            return functors;
         }
 
         std::shared_ptr<ChaseMgmt> getChaseManager() {

@@ -15,8 +15,7 @@ class FunctRuleProcessor : public SingleHeadFinalRuleProcessor {
 
         std::vector<std::pair<uint8_t, uint8_t>> &expandToFunctors(
                 std::vector<std::pair<uint8_t, uint8_t>> &posFromSecond,
-                const RuleExecutionDetails *detailsRule,
-                const uint8_t ruleExecOrder,
+                const RuleExecutionPlan *plan,
                 Literal &head);
 
     public:
@@ -30,6 +29,7 @@ class FunctRuleProcessor : public SingleHeadFinalRuleProcessor {
                 const uint8_t posHeadInRule,
                 const RuleExecutionDetails *detailsRule,
                 const uint8_t ruleExecOrder,
+                const RuleExecutionPlan *plan,
                 const size_t iteration,
                 const bool addToEndTable,
                 const int nthreads,
@@ -62,10 +62,7 @@ class FunctRuleProcessor : public SingleHeadFinalRuleProcessor {
         void processResults(const int blockid,
                 const std::vector<const std::vector<Term_t> *> &vectors1, size_t i1,
                 const std::vector<const std::vector<Term_t> *> &vectors2, size_t i2,
-                const bool unique) {
-            LOG(ERRORL) << "Not implemented";
-            throw 10;
-        }
+                const bool unique);
 
         void processResults(std::vector<int> &blockid, Term_t *p,
                 std::vector<bool> &unique, std::mutex *m) {
@@ -74,10 +71,7 @@ class FunctRuleProcessor : public SingleHeadFinalRuleProcessor {
         }
 
         void processResults(const int blockid, FCInternalTableItr *first,
-                FCInternalTableItr* second, const bool unique) {
-            LOG(ERRORL) << "Not implemented";
-            throw 10;
-        }
+                FCInternalTableItr* second, const bool unique);
 };
 
 #endif

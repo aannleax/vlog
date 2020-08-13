@@ -36,7 +36,6 @@ void RuleExecutionPlan::checkIfFilteringHashMapIsPossible(const Literal &head) {
             }
         }
     }
-
     filterLastHashMap = true;
 }
 
@@ -107,9 +106,11 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                     auto p = variablesNeededForHead.find(existingVariables[m]);
                     for (auto &el : p->second) {
                         pf.push_back(std::make_pair(el, m));
+                        newExistingVariables.push_back(existingVariables[m]);
                     }
                 } else if (varFunctorArgs.count(existingVariables[m])) {
                     pf.push_back(std::make_pair(~0, m));
+                    newExistingVariables.push_back(existingVariables[m]);
                 }
             }
         } else {
@@ -273,12 +274,11 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                 FunctorIdAndPos_t posAndId;
                 posAndId.fId = f.second.fId;
                 for(const auto &term : f.second.fArgs) {
-
                     if (term.isVariable()) {
                         auto var = term.getId();
                         bool found = false;
-                        for(int j = 0; j < existingVariables.size(); ++j) {
-                            if (existingVariables[j] == var) {
+                        for(int j = 0; j < newExistingVariables.size(); ++j) {
+                            if (newExistingVariables[j] == var) {
                                 posAndId.pos.push_back(j);
                                 found = true;
                                 break;
@@ -293,7 +293,7 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                                 if (t.isVariable()) {
                                     if (t.getId() == var) {
                                         posAndId.pos.push_back(
-                                                existingVariables.size() +
+                                                newExistingVariables.size() +
                                                 litVars);
                                         found = true;
                                         break;

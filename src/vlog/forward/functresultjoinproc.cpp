@@ -11,12 +11,13 @@ FunctRuleProcessor::FunctRuleProcessor(
         const uint8_t posHeadInRule,
         const RuleExecutionDetails *detailsRule,
         const uint8_t ruleExecOrder,
+        const RuleExecutionPlan *plan,
         const size_t iteration,
         const bool addToEndTable,
         const int nthreads,
         const bool ignoreDupElimin) :
     SingleHeadFinalRuleProcessor(posFromFirst,
-            expandToFunctors(posFromSecond, detailsRule, ruleExecOrder, head),
+            expandToFunctors(posFromSecond, plan, head),
             listDerivations,
             t,
             head,
@@ -29,9 +30,7 @@ FunctRuleProcessor::FunctRuleProcessor(
             ignoreDupElimin),
     nOldCopyFromSecond(posFromSecond.size()),
     functorMap(sn->getFunctorMap()) {
-        //plan = &(detailsRule->orderExecutions[ruleExecOrder]);
-        functors = &(detailsRule->orderExecutions[ruleExecOrder].
-                functvars2posFromSecond);
+        functors = &(plan->functvars2posFromSecond);
         functorArgs = std::unique_ptr<uint64_t[]>(
                 new uint64_t[MAX_FUNCTOR_NARGS]);
         assert(functors->size() > 0);
@@ -39,14 +38,12 @@ FunctRuleProcessor::FunctRuleProcessor(
 
 std::vector<std::pair<uint8_t, uint8_t>> &FunctRuleProcessor::expandToFunctors(
         std::vector<std::pair<uint8_t, uint8_t>> &posFromSecond,
-        const RuleExecutionDetails *detailsRule,
-        const uint8_t ruleExecOrder,
+        const RuleExecutionPlan *plan,
         Literal &head) {
-    const auto &plan = detailsRule->orderExecutions[ruleExecOrder];
     newPosFromSecond = posFromSecond;
     //Extend it by copying the variables that represent functors
-    auto &functList = plan.functvars2posFromSecond;
-    size_t i = plan.plan.back()->getTupleSize();
+    auto &functList = plan->functvars2posFromSecond;
+    size_t i = plan->plan.back()->getTupleSize();
     size_t countFunctors = 0;
     assert(functList.size() > 0);
     for(uint8_t j = 0; j < head.getTupleSize(); ++j) {
@@ -118,27 +115,27 @@ void FunctRuleProcessor::addColumns(const int blockid, FCInternalTableItr *itr,
     for(const auto &f : *functors) {
         ColumnWriter w;
         //Create the functors
-        auto fId = f.second.fId;
+        auto fid = f.second.fId;
         std::vector<std::unique_ptr<ColumnReader>> readers;
         size_t nargs = f.second.pos.size();
         for(auto pos : f.second.pos) {
             readers.push_back(c[pos]->getReader());
         }
-        //Go through all the values
+        //go through all the values
         for(size_t i = 0; i < sizecolumns; ++i) {
             for(size_t j = 0; j < nargs; ++j) {
                 if (!readers[j]->hasNext()) {
-                    LOG(ERRORL) << "This should not happen";
+                    LOG(ERRORL) << "this should not happen";
                     throw 10;
                 }
                 functorArgs[j] = readers[j]->next();
             }
-            //Get the ID
-            uint64_t id = functorMap.getID(fId, functorArgs.get());
+            //get the id
+            uint64_t id = functorMap.getID(fid, functorArgs.get());
             w.add(id);
         }
         colAndposInHead.push_back(
-                    std::make_pair(w.getColumn(), posFromSecond[j++].first));
+                std::make_pair(w.getColumn(), posFromSecond[j++].first));
     }
     std::sort(colAndposInHead.begin(), colAndposInHead.end(), __sortByHeadPos);
 
@@ -148,4 +145,79 @@ void FunctRuleProcessor::addColumns(const int blockid, FCInternalTableItr *itr,
         final_c.push_back(p.first);
     }
     addColumns_protected(blockid, final_c, unique, sorted, lastInsert);
+}
+
+void FunctRuleProcessor::processResults(const int blockid, FCInternalTableItr *first,
+        FCInternalTableItr* second, const bool unique) {
+    for (uint32_t i = 0; i < nCopyFromFirst; ++i) {
+        if (posFromFirst[i].first != ((uint8_t) - 1)) {
+            row[posFromFirst[i].first] = first->getCurrentValue(posFromFirst[i].second);
+        }
+    }
+    for (uint32_t i = 0; i < nCopyFromSecond; ++i) {
+        if (posFromSecond[i].first != ((uint8_t) - 1)) {
+            if (i < nOldCopyFromSecond) {
+                row[posFromSecond[i].first] =
+                    second->getCurrentValue(posFromSecond[i].second);
+            } else {
+                //This is a position added by this object. It represents a functor
+                auto &f = functors->at(i - nOldCopyFromSecond);
+                auto fid = f.second.fId;
+                size_t nargs = f.second.pos.size();
+                //go through all the values
+                for(size_t j = 0; j < nargs; ++j) {
+                    auto pos = f.second.pos[j];
+                    //Should I pick it from the left or the right side?
+                    if (pos < nCopyFromFirst) {
+                        functorArgs[j] = first->getCurrentValue(pos);
+                    } else {
+                        functorArgs[j] = second->getCurrentValue(
+                                pos - nCopyFromFirst);
+                    }
+                }
+                uint64_t id = functorMap.getID(fid, functorArgs.get());
+                row[posFromSecond[i].first] = id;
+            }
+        }
+    }
+    SingleHeadFinalRuleProcessor::processResults(
+            blockid, unique || ignoreDupElimin, NULL);
+}
+
+void FunctRuleProcessor::processResults(const int blockid,
+        const std::vector<const std::vector<Term_t> *> &vectors1, size_t i1,
+        const std::vector<const std::vector<Term_t> *> &vectors2, size_t i2,
+        const bool unique) {
+    for (int i = 0; i < nCopyFromFirst; i++) {
+        if (posFromFirst[i].first != ((uint8_t) - 1)) {
+            row[posFromFirst[i].first] = (*vectors1[posFromFirst[i].second])[i1];
+        }
+    }
+    for (int i = 0; i < nCopyFromSecond; i++) {
+        if (posFromFirst[i].first != ((uint8_t) - 1)) {
+            if (i < nOldCopyFromSecond) {
+                row[posFromSecond[i].first] = (*vectors2[posFromSecond[i].second])[i2];
+            } else {
+                //This is a position added by this object. It represents a functor
+                auto &f = functors->at(i - nOldCopyFromSecond);
+                auto fid = f.second.fId;
+                size_t nargs = f.second.pos.size();
+                //go through all the values
+                for(size_t j = 0; j < nargs; ++j) {
+                    auto pos = f.second.pos[j];
+                    //Should I pick it from the left or the right side?
+                    if (pos < nCopyFromFirst) {
+                        functorArgs[j] = (*vectors1[pos])[i1];
+                    } else {
+                        functorArgs[j] = (*vectors2[pos - nCopyFromFirst])[i2];
+                    }
+                }
+                uint64_t id = functorMap.getID(fid, functorArgs.get());
+                row[posFromSecond[i].first] = id;
+
+            }
+        }
+    }
+    SingleHeadFinalRuleProcessor::processResults(
+            blockid, unique || ignoreDupElimin, NULL);
 }

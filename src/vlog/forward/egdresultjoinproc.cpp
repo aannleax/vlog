@@ -1,3 +1,5 @@
+#include <limits.h>
+
 #include <vlog/egdresultjoinproc.h>
 #include <vlog/seminaiver.h>
 

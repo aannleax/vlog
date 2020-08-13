@@ -17,7 +17,7 @@ FunctRuleProcessor::FunctRuleProcessor(
         const int nthreads,
         const bool ignoreDupElimin) :
     SingleHeadFinalRuleProcessor(posFromFirst,
-            expandToFunctors(posFromSecond, plan, head),
+            posFromSecond,
             listDerivations,
             t,
             head,
@@ -30,17 +30,16 @@ FunctRuleProcessor::FunctRuleProcessor(
             ignoreDupElimin),
     nOldCopyFromSecond(posFromSecond.size()),
     functorMap(sn->getFunctorMap()) {
+        expandToFunctors(plan, head);
         functors = &(plan->functvars2posFromSecond);
         functorArgs = std::unique_ptr<uint64_t[]>(
                 new uint64_t[MAX_FUNCTOR_NARGS]);
         assert(functors->size() > 0);
     }
 
-std::vector<std::pair<uint8_t, uint8_t>> &FunctRuleProcessor::expandToFunctors(
-        std::vector<std::pair<uint8_t, uint8_t>> &posFromSecond,
+void FunctRuleProcessor::expandToFunctors(
         const RuleExecutionPlan *plan,
         Literal &head) {
-    newPosFromSecond = posFromSecond;
     //Extend it by copying the variables that represent functors
     auto &functList = plan->functvars2posFromSecond;
     size_t i = plan->plan.back()->getTupleSize();
@@ -51,7 +50,8 @@ std::vector<std::pair<uint8_t, uint8_t>> &FunctRuleProcessor::expandToFunctors(
             //Search if the variable is a functor
             auto var = head.getTermAtPos(j).getId();
             if (var == functList[countFunctors].first) {
-                newPosFromSecond.push_back(std::make_pair(j, i));
+                //newPosFromSecond.push_back(std::make_pair(j, i));
+                posFromSecond[nCopyFromSecond++] = std::make_pair(j, i);
                 countFunctors++;
                 i++;
                 if (countFunctors == functList.size()) {
@@ -61,7 +61,6 @@ std::vector<std::pair<uint8_t, uint8_t>> &FunctRuleProcessor::expandToFunctors(
         }
     }
     assert(countFunctors == functList.size()); //I've processed all the functors
-    return newPosFromSecond;
 }
 
 bool __sortByHeadPos(const std::pair<std::shared_ptr<Column>, uint8_t> &a,

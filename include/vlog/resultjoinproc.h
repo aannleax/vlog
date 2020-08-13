@@ -49,7 +49,7 @@ class ResultJoinProcessor {
         Term_t *row;
         bool deleteRow;
         const uint8_t nCopyFromFirst;
-        const uint8_t nCopyFromSecond;
+        uint8_t nCopyFromSecond;
         std::pair<uint8_t, uint8_t> posFromFirst[MAX_MAPPINGS];
         std::pair<uint8_t, uint8_t> posFromSecond[MAX_MAPPINGS];
         const int nthreads;

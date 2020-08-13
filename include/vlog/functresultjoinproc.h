@@ -6,15 +6,13 @@
 
 class FunctRuleProcessor : public SingleHeadFinalRuleProcessor {
     private:
-        std::vector<std::pair<uint8_t, uint8_t>> newPosFromSecond;
         const std::vector<std::pair<Var_t, FunctorIdAndPos_t>> *functors;
         //const RuleExecutionPlan *plan;
         const size_t nOldCopyFromSecond;
         FunctorMap &functorMap;
         std::unique_ptr<uint64_t[]> functorArgs;
 
-        std::vector<std::pair<uint8_t, uint8_t>> &expandToFunctors(
-                std::vector<std::pair<uint8_t, uint8_t>> &posFromSecond,
+        void expandToFunctors(
                 const RuleExecutionPlan *plan,
                 Literal &head);
 

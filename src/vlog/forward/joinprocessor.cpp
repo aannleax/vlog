@@ -253,17 +253,28 @@ void JoinExecutor::verificativeJoinOneColumnSameOutput(
 }
 
 void JoinExecutor::verificativeJoinOneColumn(
-        SemiNaiver * naiver,
-        const FCInternalTable * intermediateResults,
-        const Literal & literal,
+        SemiNaiver *naiver,
+        const FCInternalTable *intermediateResults,
+        const Literal &literal,
         const size_t min,
         const size_t max,
-        ResultJoinProcessor * output,
+        ResultJoinProcessor *output,
         const RuleExecutionPlan &hv,
         const int currentLiteral,
         int nthreads) {
 
-    assert(output->getNCopyFromSecond() == 0);
+#if DEBUG
+    if (output->getNCopyFromSecond() > 0) {
+        //Only variables that represent functors are allowed
+        auto pos = output->getPosFromSecond();
+        for(size_t i = 0; i < output->getNCopyFromSecond(); ++i) {
+            if (pos[i].second < literal.getTupleSize()) {
+                LOG(ERRORL) << "This should not happen";
+                throw 10;
+            }
+        }
+    }
+#endif
 
     //1- Sort the existing results by the join field
     std::vector<uint8_t> joinField;
@@ -587,7 +598,9 @@ void JoinExecutor::join(SemiNaiver * naiver, const FCInternalTable * t1,
             LOG(TRACEL) << "i = " << i << ", first = " << (int) joinsCoordinates[i].first << ", second = " << (int) joinsCoordinates[i].second;
         }
 #endif
-        if (t1->estimateNRows() <= factor * THRESHOLD_HASHJOIN
+        //No hash joins if there are functors
+        if (hv.functvars2posFromSecond.empty()
+                && t1->estimateNRows() <= factor * THRESHOLD_HASHJOIN
                 && joinsCoordinates.size() < 3 && joinsCoordinates.size() > 0
                 && (factor != 1 || joinsCoordinates.size() > 1 ||
                     joinsCoordinates[0].first != joinsCoordinates[0].second ||
@@ -1151,7 +1164,11 @@ void JoinExecutor::mergejoin(const FCInternalTable * t1, SemiNaiver * naiver,
         std::vector<Term_t> distinctValues =
             ((InmemoryFCInternalTable*)t1)->getDistinctValues(joinsCoordinates[i].first, 8);
         LOG(TRACEL) << "distinctValues.size() = " << distinctValues.size();
-        if (distinctValues.size() < 8) {
+        /**** JACOPO: I've disabled this optimization (added false in the loop
+         * below). It seems a technique
+         * that works only on few specific cases and causes more problems than
+         * benefits ***/
+        if (distinctValues.size() < 8 && false) {
             //std::sort(distinctValues.begin(), distinctValues.end());
             idxColumnsLowCardInMap.push_back(joinsCoordinates[i].first);
             idxColumnsLowCardInLiteral.push_back(joinsCoordinates[i].second);

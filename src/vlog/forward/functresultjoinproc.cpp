@@ -221,3 +221,40 @@ void FunctRuleProcessor::processResults(const int blockid,
     SingleHeadFinalRuleProcessor::processResults(
             blockid, unique || ignoreDupElimin, NULL);
 }
+
+void FunctRuleProcessor::processResults(const int blockid, const Term_t *first,
+        FCInternalTableItr* second, const bool unique) {
+    for (uint32_t i = 0; i < nCopyFromFirst; ++i) {
+        if (posFromFirst[i].first != ((uint8_t) - 1)) {
+            row[posFromFirst[i].first] = first[posFromFirst[i].second];
+        }
+    }
+    for (uint32_t i = 0; i < nCopyFromSecond; ++i) {
+        if (posFromSecond[i].first != ((uint8_t) - 1)) {
+            if (i < nOldCopyFromSecond) {
+                row[posFromSecond[i].first] =
+                    second->getCurrentValue(posFromSecond[i].second);
+            } else {
+                //This is a position added by this object. It represents a functor
+                auto &f = functors->at(i - nOldCopyFromSecond);
+                auto fid = f.second.fId;
+                size_t nargs = f.second.pos.size();
+                //go through all the values
+                for(size_t j = 0; j < nargs; ++j) {
+                    auto pos = f.second.pos[j];
+                    //Should I pick it from the left or the right side?
+                    if (pos < nCopyFromFirst) {
+                        functorArgs[j] = first[pos];
+                    } else {
+                        functorArgs[j] = second->getCurrentValue(
+                                pos - nCopyFromFirst);
+                    }
+                }
+                uint64_t id = functorMap.getID(fid, functorArgs.get());
+                row[posFromSecond[i].first] = id;
+            }
+        }
+    }
+    SingleHeadFinalRuleProcessor::processResults(
+            blockid, unique || ignoreDupElimin, NULL);
+}

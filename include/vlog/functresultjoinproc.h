@@ -52,10 +52,7 @@ class FunctRuleProcessor : public SingleHeadFinalRuleProcessor {
         }
 
         void processResults(const int blockid, const Term_t *first,
-                FCInternalTableItr* second, const bool unique) {
-            LOG(ERRORL) << "Not implemented";
-            throw 10;
-        }
+                FCInternalTableItr* second, const bool unique);
 
         void processResults(const int blockid,
                 const std::vector<const std::vector<Term_t> *> &vectors1, size_t i1,

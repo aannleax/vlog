@@ -78,20 +78,21 @@ void FunctRuleProcessor::addColumns(const int blockid, FCInternalTableItr *itr,
         throw 10;
     }
 
-    uint8_t columns[256];
-    for (uint32_t i = 0; i < nOldCopyFromSecond; ++i) {
-        columns[i] = posFromSecond[i].second;
-    }
-    std::vector<std::shared_ptr<Column>> c =
-        itr->getColumn(nOldCopyFromSecond,
-                columns);
+    //    uint8_t columns[256];
+    //    for (uint32_t i = 0; i < nOldCopyFromSecond; ++i) {
+    //        columns[i] = posFromSecond[i].second;
+    //    }
+    //    std::vector<std::shared_ptr<Column>> c =
+    //        itr->getColumn(nOldCopyFromSecond,
+    //                columns);
+    std::vector<std::shared_ptr<Column>> allCols = itr->getAllColumns();
     if (rowsize == 0) {
-        assert(c.size() == 0);
+        assert(allCols.size() == 0);
         return;
     }
     uint64_t sizecolumns = 0;
-    if (c.size() > 0) {
-        sizecolumns = c[0]->size();
+    if (allCols.size() > 0) {
+        sizecolumns = allCols[0]->size();
     }
 
     if (sizecolumns == 0) {
@@ -104,11 +105,11 @@ void FunctRuleProcessor::addColumns(const int blockid, FCInternalTableItr *itr,
     for (uint32_t i = 0; i < nOldCopyFromSecond; ++i) {
         if (posFromSecond[i].first != ((uint8_t) - 1)) {
             colAndposInHead.push_back(
-                    std::make_pair(c[i], posFromSecond[i].first));
+                    std::make_pair(allCols[posFromSecond[i].second],
+                        posFromSecond[i].first));
         }
     }
 
-    assert(lastInsert); //I'm not sure I handle the case where lastInsert=false
     //Must add columns for the functors
     size_t j = nOldCopyFromSecond;
     for(const auto &f : *functors) {
@@ -118,7 +119,7 @@ void FunctRuleProcessor::addColumns(const int blockid, FCInternalTableItr *itr,
         std::vector<std::unique_ptr<ColumnReader>> readers;
         size_t nargs = f.second.pos.size();
         for(auto pos : f.second.pos) {
-            readers.push_back(c[pos]->getReader());
+            readers.push_back(allCols[pos]->getReader());
         }
         //go through all the values
         for(size_t i = 0; i < sizecolumns; ++i) {

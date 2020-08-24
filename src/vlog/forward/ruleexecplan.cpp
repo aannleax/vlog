@@ -145,28 +145,23 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
         std::vector<std::pair<uint8_t,uint8_t>> v2p;
         //Put in join coordinates between the previous and the current literal
         uint8_t litVars = 0;
-        std::set<Var_t> varSoFar; //This set is used to avoid that repeated
-        //variables in the literal produce multiple copies in the head
+        std::set<Var_t> processed; // This set is used to avoid repeated variables in the literal.
         for (uint8_t x = 0; x < currentLiteral->getTupleSize(); ++x) {
             const VTerm t = currentLiteral->getTermAtPos(x);
 
             if (t.isVariable()) {
+                // Check if it is a repeated variable. In that case, we skip it.
+                if (processed.count(t.getId())) {
+                    continue;
+                }
+                processed.insert(t.getId());
+
                 //Is it join?
                 auto itr = std::find(existingVariables.begin(),existingVariables.end(),t.getId());
                 if (itr != existingVariables.end()) { //found
                     uint8_t position = itr - existingVariables.begin();
-                    //Maybe I join with a repeated variable. In this case, I don't add it
-                    bool repeatedFound = false;
-                    for(auto &c : jc) {
-                        if (c.first == position) {
-                            repeatedFound = true;
-                            break;
-                        }
-                    }
-                    if (!repeatedFound) {
-                        jc.push_back(std::make_pair(position, litVars));
-                        v2p.push_back(std::make_pair(x, position));
-                    }
+                    jc.push_back(std::make_pair(position, litVars));
+                    v2p.push_back(std::make_pair(x, position));
                 } else {
                     // Check if we still need this variable. We need it if it occurs
                     // in any of the next literals in the pattern, or if it occurs

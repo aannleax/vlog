@@ -1138,7 +1138,7 @@ std::string EDBLayer::getPredType(PredId_t id) const {
     return NULL;
 }
 
-std::string EDBLayer::getPredName(PredId_t id) {
+std::string EDBLayer::getPredName(PredId_t id) const {
     return predDictionary->getRawValue(id);
 }
 

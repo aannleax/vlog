@@ -188,12 +188,9 @@ void RuleExecutionPlan::calculateJoinsCoordinates(
                                 // Here, the variable can only be needed if it occurs in the head.
                                 // The "ps" map in this case maps from the head position to
                                 // the variable number in the pattern.
-                                if (!varSoFar.count(t.getId())) {
-                                    auto p = variablesNeededForHead.find(t.getId());
-                                    for(auto &el : p->second) {
-                                        ps.push_back(std::make_pair(el, litVars));
-                                    }
-                                    varSoFar.insert(t.getId());
+                                auto p = variablesNeededForHead.find(t.getId());
+                                for(auto &el : p->second) {
+                                    ps.push_back(std::make_pair(el, litVars));
                                 }
                             } else if (varFunctorArgs.count(t.getId())) {
                                 ps.push_back(std::make_pair(~0, litVars));

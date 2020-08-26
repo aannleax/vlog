@@ -551,8 +551,9 @@ std::shared_ptr<const Segment> InmemoryTable::getSortedCachedSegment(
         //if we already have one in the cache that is say, sorted on fields 1, 2, 3
         //and we now require sorted on fields 1, 2, then the one sorted on fields 1, 2, 3
         //meets the requirement.
-        uint64_t filterByKey = __getKeyFromFields(sortBy, sortBy.size());
-        if (cachedSortedSegments.count(filterByKey)) {
+        const bool useCache = sortBy.size() <= 8 && arity <= 8; //I can index at most 8 fields
+        uint64_t filterByKey = useCache ? __getKeyFromFields(sortBy, sortBy.size()) : -1;
+        if (useCache && cachedSortedSegments.count(filterByKey)) {
             LOG(DEBUGL) << "Found sorted segment in cache";
             sortedSegment = cachedSortedSegments[filterByKey];
         } else {
@@ -567,7 +568,7 @@ std::shared_ptr<const Segment> InmemoryTable::getSortedCachedSegment(
                             break;
                         }
                     }
-                    if (! present) {
+                    if (!present) {
                         sb.push_back(i);
                     }
                 }
@@ -586,14 +587,15 @@ std::shared_ptr<const Segment> InmemoryTable::getSortedCachedSegment(
                 }
                 columns.push_back(column);
             }
-            sortedSegment = std::shared_ptr<Segment>(new Segment(arity,
-                        columns));
+            sortedSegment = std::shared_ptr<Segment>(new Segment(arity, columns));
             //If we are adding one in the cache that is say, sorted on fields 1, 2, 3,
             //this one is also sorted on fields 1, 2, and also sorted on field 1.
             //So, we add those to the hashtable as well.
-            for (uint8_t i = 0; i < sb.size(); i++) {
-                filterByKey = __getKeyFromFields(sb, i+1);
-                cachedSortedSegments[filterByKey] = sortedSegment;
+            if (useCache) {
+                for (uint8_t i = 0; i < sb.size(); i++) {
+                    filterByKey = __getKeyFromFields(sb, i+1);
+                    cachedSortedSegments[filterByKey] = sortedSegment;
+                }
             }
         }
     }

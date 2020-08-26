@@ -731,7 +731,7 @@ void ExistentialRuleProcessor::addColumns(const int blockid,
             " from outside the itr";
         throw 10;
     }
-    assert(lastInsert); //I'm not sure I handle the case where lastInsert=false
+    //assert(lastInsert); //I'm not sure I handle the case where lastInsert=false
     std::vector<std::shared_ptr<Column>> c = itr->getAllColumns();
     addColumns_protected(blockid, c, unique, sorted);
 }

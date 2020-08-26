@@ -600,7 +600,7 @@ void JoinExecutor::join(SemiNaiver * naiver, const FCInternalTable * t1,
         }
 #endif
         //No hash joins if there are functors
-        if (hv.functvars2posFromSecond.empty()
+        /*if (hv.functvars2posFromSecond.empty()
                 && t1->estimateNRows() <= factor * THRESHOLD_HASHJOIN
                 && joinsCoordinates.size() < 3 && joinsCoordinates.size() > 0
                 && (factor != 1 || joinsCoordinates.size() > 1 ||
@@ -613,14 +613,14 @@ void JoinExecutor::join(SemiNaiver * naiver, const FCInternalTable * t1,
 #ifdef DEBUG
             output->checkSizes();
 #endif
-        } else {
+        } else {*/
             LOG(TRACEL) << "Executing mergejoin.";
             mergejoin(t1, naiver, outputLiterals, literal, min, max,
                     joinsCoordinates, output, nthreads);
 #ifdef DEBUG
             output->checkSizes();
 #endif
-        }
+        /*}*/
     }
 }
 

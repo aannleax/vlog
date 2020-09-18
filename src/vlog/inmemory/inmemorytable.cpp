@@ -107,6 +107,7 @@ InmemoryTable::InmemoryTable(std::string repository, std::string tablename,
         ifs = new std::ifstream(tablefile, ios_base::in | ios_base::binary);
         if (ifs->fail()) {
             std::string e = "While importing data for predicate \"" + layer->getPredName(predid) + "\": could not open file " + tablefile;
+            segment = NULL;
             LOG(ERRORL) << e;
             throw (e);
         }
@@ -155,6 +156,7 @@ InmemoryTable::InmemoryTable(std::string repository, std::string tablename,
         } else {
             std::string e = "While importing data for predicate \"" + layer->getPredName(predid) + "\": could not open file " + tablefile + " nor " + (repository + "/" + tablename + ".csv") + " nor gzipped versions";
             LOG(ERRORL) << e;
+            segment = NULL;
             throw(e);
         }
         FileReader reader(f);

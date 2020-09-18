@@ -238,37 +238,80 @@ SemiNaiver::SemiNaiver(EDBLayer &layer,
 #endif
     }
 
-bool SemiNaiver::executeRules(std::vector<RuleExecutionDetails> &edbRuleset,
+void SemiNaiver::executeRules(std::vector<RuleExecutionDetails> &edbRuleset,
+        std::vector<RuleExecutionDetails> &extEdbRuleset,
         std::vector<std::vector<RuleExecutionDetails>> &ruleset,
+        std::vector<std::vector<RuleExecutionDetails>> &extruleset,
         std::vector<StatIteration> &costRules,
-        const size_t limitView,
-        bool fixpoint, unsigned long *timeout) {
-#if DEBUG
-    std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-#endif
-    bool newDer = false;
-    for (size_t i = 0; i < edbRuleset.size(); ++i) {
-        newDer |= executeRule(edbRuleset[i], iteration, limitView, NULL);
-        if (timeout != NULL && *timeout != 0) {
-            std::chrono::duration<double> s = std::chrono::system_clock::now() - startTime;
-            if (s.count() > *timeout) {
-                *timeout = 0;   // To indicate materialization was stopped because of timeout.
-                return newDer;
-            }
-        }
-        iteration++;
-    }
-#if DEBUG
-    std::chrono::duration<double> sec = std::chrono::system_clock::now() - start;
-    LOG(DEBUGL) << "Runtime EDB rules ms = " << sec.count() * 1000;
-#endif
+        unsigned long *timeout) {
+    bool mayHaveTimeout = timeout != NULL && *timeout != 0;
 
     for (int i = 0; i < ruleset.size(); i++) {
-        if (ruleset[i].size() > 0) {
-            newDer |= executeUntilSaturation(ruleset[i], costRules, limitView,  fixpoint, timeout);
+        bool newDer = true;
+        bool first = true;
+
+        while (newDer) {
+            newDer = false;
+            int limitView = 0;
+            if (first) {
+#if DEBUG
+                std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
+#endif
+                for (size_t j = 0; j < edbRuleset.size(); ++j) {
+                    newDer |= executeRule(edbRuleset[j], iteration, limitView, NULL);
+                    if (timeout != NULL && *timeout != 0) {
+                        std::chrono::duration<double> s = std::chrono::system_clock::now() - startTime;
+                        if (s.count() > *timeout) {
+                            *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                            return;
+                        }
+                    }
+                    iteration++;
+                }
+#if DEBUG
+                std::chrono::duration<double> sec = std::chrono::system_clock::now() - start;
+                LOG(DEBUGL) << "Runtime EDB rules ms = " << sec.count() * 1000;
+#endif
+            }
+        
+            if (ruleset[i].size() > 0) {
+                newDer |= executeUntilSaturation(ruleset[i], costRules, limitView,  true, timeout);
+            }
+
+            if ((typeChase == TypeChase::RESTRICTED_CHASE ||
+                    typeChase == TypeChase::SUM_RESTRICTED_CHASE)) {
+                limitView = iteration == 0 ? 1 : iteration;
+            }
+
+            if (first) {
+                for (size_t j = 0; j < extEdbRuleset.size(); ++j) {
+                    newDer |= executeRule(extEdbRuleset[j], iteration, limitView,  NULL);
+                    if (timeout != NULL && *timeout != 0) {
+                        std::chrono::duration<double> s = std::chrono::system_clock::now() - startTime;
+                        if (s.count() > *timeout) {
+                            *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                            return;
+                        }
+                    }
+                }
+                first = false;
+            }
+
+            if (extruleset[i].size() > 0) {
+                newDer |= executeUntilSaturation(extruleset[i], costRules, limitView, 
+                        (typeChase != TypeChase::RESTRICTED_CHASE
+                         && typeChase != TypeChase::SUM_RESTRICTED_CHASE),
+                        timeout);
+            }
+            if (foundCyclicTerms && typeChase != TypeChase::SUM_RESTRICTED_CHASE) {
+                return;
+            }
+            if (mayHaveTimeout && *timeout == 0) {
+                return;
+            }
         }
     }
-    return newDer;
+    return;
 }
 
 void SemiNaiver::prepare(size_t lastExecution, int singleRuleToCheck, std::vector<RuleExecutionDetails> &allrules) {
@@ -380,32 +423,11 @@ void SemiNaiver::run(size_t lastExecution, size_t it, unsigned long *timeout,
                 }
             }
         }
-        int loopNr = 0;
-        std::vector<RuleExecutionDetails> emptyRuleset;
-        bool mayHaveTimeout = timeout != NULL && *timeout != 0;
-        while (true) {
-            bool resp1;
-            if (loopNr == 0)
-                resp1 = executeRules(tmpEDBRules, tmpIDBRules, costRules, 0, true, timeout);
-            else
-                resp1 = executeRules(emptyRuleset, tmpIDBRules, costRules, 0, true, timeout);
-            bool resp2;
-            if (loopNr == 0)
-                resp2 = executeRules(tmpExtEDBRules, tmpExtIDBRules,
-                        costRules, iteration == 0 ? 1 : iteration, false, timeout);
-            else
-                resp2 = executeRules(emptyRuleset, tmpExtIDBRules, costRules,
-                        iteration == 0 ? 1 : iteration, false, timeout);
-            if ((!resp1 && !resp2) || (foundCyclicTerms && typeChase != TypeChase::SUM_RESTRICTED_CHASE)) {
-                break; //Fix-point
-            }
-            loopNr++;
-            if (mayHaveTimeout && *timeout == 0) {
-                break;
-            }
-        }
+        executeRules(tmpEDBRules, tmpExtEDBRules, tmpIDBRules, tmpExtIDBRules, costRules, timeout);
     } else {
-        executeRules(allEDBRules, allIDBRules, costRules, 0, true, timeout);
+        std::vector<RuleExecutionDetails> emptyRuleset;
+        std::vector<std::vector<RuleExecutionDetails>> emptyExtIDBRules(nStratificationClasses);
+        executeRules(allEDBRules, emptyRuleset, allIDBRules, emptyExtIDBRules, costRules, timeout);
     }
 
     running = false;
@@ -1422,6 +1444,11 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
                 } else {
                     // We have an atom without variables (or none that we need further on), and we already
                     // checked that the atoms are not empty.
+                    // No we did not! The estimate said it was not empty, but that is just an estimate.
+                    if (checkEmpty(bodyLiteral)) {
+                        delete joinOutput;
+                        break;
+                    }
                 }
             } else {
                 //Perform the join
@@ -1557,6 +1584,42 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
     return newDerivations;
 }
 
+bool SemiNaiver::checkEmpty(const Literal *lit) {
+    FCIterator tableIt = getTable(lit->getPredicate().getId());
+    VTuple tuple = lit->getTuple();
+    std::vector<std::pair<uint8_t, uint8_t>> repeated = lit->getRepeatedVars();
+
+    while (! tableIt.isEmpty()) {
+	std::shared_ptr<const FCInternalTable> table = tableIt.getCurrentTable();
+	FCInternalTableItr *itrTable = table->getIterator();
+	while (itrTable->hasNext()) {
+	    itrTable->next();
+	    bool found = true;
+	    for (int i = 0; i < tuple.getSize(); i++) {
+		if (! tuple.get(i).isVariable()) {
+		    if (itrTable->getCurrentValue(i) != tuple.get(i).getValue()) {
+			found = false;
+			break;
+		    }
+		}
+		for (uint8_t i = 0; i < repeated.size(); ++i) {
+		    if (itrTable->getCurrentValue(repeated[i].first) != itrTable->getCurrentValue(repeated[i].second)) {
+			found = false;
+			break;
+		    }
+		}
+	    }
+	    if (found) {
+		table->releaseIterator(itrTable);
+		return false;
+	    }
+	}
+	table->releaseIterator(itrTable);
+	tableIt.moveNextCount();
+    }
+    return true;
+}
+
 size_t SemiNaiver::getNLastDerivationsFromList() {
     return listDerivations.back().table->getNRows();
 }
@@ -1585,11 +1648,7 @@ size_t SemiNaiver::estimateCardTable(const Literal &literal,
             return 0;
         }
     } else {
-        size_t estimate = table->estimateCardinality(literal, minIteration, maxIteration);
-        if (estimate == 0) {
-            return 0;
-        }
-        return estimate;
+        return table->estimateCardinality(literal, minIteration, maxIteration);
         // Was: return table->estimateCardInRange(minIteration, maxIteration);
     }
 }

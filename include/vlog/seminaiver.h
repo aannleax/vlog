@@ -115,12 +115,13 @@ class SemiNaiver {
                 const std::vector<Literal> &heads,
                 const Var2Funct_t &functors);
 
-        bool executeRules(std::vector<RuleExecutionDetails> &allEDBRules,
-                std::vector<std::vector<RuleExecutionDetails>> &allIDBRules,
-                // one entry for each stratification class
+        void executeRules(
+                std::vector<RuleExecutionDetails> &EDBRules,
+                std::vector<RuleExecutionDetails> &ExtEDBRules,
+                std::vector<std::vector<RuleExecutionDetails>> &IDBRules,    // one entry for each stratification class
+                std::vector<std::vector<RuleExecutionDetails>> &ExtIDBRules,    // one entry for each stratification class
                 std::vector<StatIteration> &costRules,
-                const size_t limitView,
-                bool fixpoint, unsigned long *timeout = NULL);
+                unsigned long *timeout = NULL);
 
         bool executeRule(RuleExecutionDetails &ruleDetails,
                 std::vector<Literal> &heads,
@@ -131,6 +132,8 @@ class SemiNaiver {
         size_t estimateCardTable(const Literal &literal,
                 const size_t minIteration,
                 const size_t maxIteration);
+
+	bool checkEmpty(const Literal *lit);
 
     protected:
         TypeChase typeChase;

@@ -75,7 +75,7 @@ void printHelp(const char *programName, ProgramArgs &desc) {
 
 inline void printErrorMsg(const std::string msg) {
     std::cout << std::endl << "*** ERROR: " << msg << "***" << std::endl << std::endl
-        << "Please type the subcommand \"help\" for instructions (e.g. Vlog help)."
+        << "Please type the subcommand \"help\" for instructions (e.g. VLog help)."
         << std::endl;
 }
 

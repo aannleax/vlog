@@ -62,6 +62,7 @@ file(GLOB vlog_SRC
     "src/launcher/vloglayer.cpp"
     "src/launcher/vlogscan.cpp"
     "src/vlog/prediction/*.cpp"
+    "src/vlog/prob-ne/*.cpp"
     "src/vlog/util/*.cpp"
     )
 

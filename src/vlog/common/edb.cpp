@@ -22,6 +22,7 @@
 #include <vlog/inmemory/inmemorytable.h>
 #include <vlog/embeddings/embtable.h>
 #include <vlog/embeddings/topktable.h>
+#include <vlog/prob-ne/probnetable.h>
 #include <vlog/incremental/edb-table-from-idb.h>
 #include <vlog/incremental/edb-table-importer.h>
 
@@ -232,6 +233,22 @@ void EDBLayer::addTopKTable(const EDBConf::Table &tableConf) {
     infot.manager = std::shared_ptr<EDBTable>(table);
     dbPredicates.insert(make_pair(infot.id, infot));
 }
+
+void EDBLayer::addProbNETable(const EDBConf::Table &tableConf) {
+    EDBInfoTable infot;
+    const std::string predicate = tableConf.predname;
+    infot.id = (PredId_t) predDictionary->getOrAdd(predicate);
+    if (doesPredExists(infot.id)) {
+        LOG(WARNL) << "Rewriting table for predicate " << predicate;
+        dbPredicates.erase(infot.id);
+    }
+    infot.type = "ProbNE";
+    ProbNETable *table = new ProbNETable(infot.id, predicate);
+    infot.arity = table->getArity();
+    infot.manager = std::shared_ptr<EDBTable>(table);
+    dbPredicates.insert(make_pair(infot.id, infot));
+}
+
 void EDBLayer::addEDBonIDBTable(const EDBConf::Table &tableConf) {
     EDBInfoTable infot;
     const string pn = tableConf.predname;
@@ -1074,7 +1091,7 @@ bool EDBLayer::getDictText(const uint64_t id, char *text) const {
 }
 
 std::string EDBLayer::getDictText(const uint64_t id) const {
-   if (IS_NUMBER(id)) {
+    if (IS_NUMBER(id)) {
         if (IS_UINT(id)) {
             uint64_t value = GET_UINT(id);
             return std::to_string(value);

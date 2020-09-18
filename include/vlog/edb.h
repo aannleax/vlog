@@ -152,6 +152,8 @@ class EDBLayer {
 
         void addEmbTable(const EDBConf::Table &tableConf);
 
+        void addProbNETable(const EDBConf::Table &tableConf);
+
 #ifdef MYSQL
         void addMySQLTable(const EDBConf::Table &tableConf);
 #endif
@@ -231,6 +233,8 @@ class EDBLayer {
                         addEmbTable(table);
                     } else if (table.type == "TopK") {
                         addTopKTable(table);
+                    } else if (table.type == "ProbNotEq") {
+                        addProbNETable(table);
                     } else {
                         LOG(ERRORL) << "Type of table is not supported";
                         throw 10;

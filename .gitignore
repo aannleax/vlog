@@ -29,3 +29,5 @@ testOutput
 **/*.ipynb
 **/*.stats
 **/*.conf
+experiments/**/*
+compile_commands.json

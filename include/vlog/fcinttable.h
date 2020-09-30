@@ -31,6 +31,10 @@ class FCInternalTableItr {
 
         virtual void next() = 0;
 
+        virtual void next(Term_t hint1, Term_t hint2) {
+            next();
+        }
+
         virtual void clear() {
         }
 
@@ -353,6 +357,8 @@ class EDBFCInternalTableItr final : public FCInternalTableItr {
         inline bool hasNext();
 
         inline void next();
+
+        inline void next(Term_t hint1, Term_t hint2);
 
         FCInternalTableItr *copy() const ;
 

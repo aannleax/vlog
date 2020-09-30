@@ -601,27 +601,27 @@ void JoinExecutor::join(SemiNaiver * naiver, const FCInternalTable * t1,
 #endif
         //No hash joins if there are functors
         /*if (hv.functvars2posFromSecond.empty()
-                && t1->estimateNRows() <= factor * THRESHOLD_HASHJOIN
-                && joinsCoordinates.size() < 3 && joinsCoordinates.size() > 0
-                && (factor != 1 || joinsCoordinates.size() > 1 ||
-                    joinsCoordinates[0].first != joinsCoordinates[0].second ||
-                    joinsCoordinates[0].first != 0)) {
-            LOG(TRACEL) << "Executing hashjoin.";
-            hashjoin(t1, naiver, outputLiterals, literal, min, max, filterValueVars,
-                    joinsCoordinates, output,
-                    lastLiteral, ruleDetails, hv, processedTables, nthreads);
+          && t1->estimateNRows() <= factor * THRESHOLD_HASHJOIN
+          && joinsCoordinates.size() < 3 && joinsCoordinates.size() > 0
+          && (factor != 1 || joinsCoordinates.size() > 1 ||
+          joinsCoordinates[0].first != joinsCoordinates[0].second ||
+          joinsCoordinates[0].first != 0)) {
+          LOG(TRACEL) << "Executing hashjoin.";
+          hashjoin(t1, naiver, outputLiterals, literal, min, max, filterValueVars,
+          joinsCoordinates, output,
+          lastLiteral, ruleDetails, hv, processedTables, nthreads);
 #ifdef DEBUG
-            output->checkSizes();
+output->checkSizes();
 #endif
-        } else {*/
-            LOG(TRACEL) << "Executing mergejoin.";
-            mergejoin(t1, naiver, outputLiterals, literal, min, max,
-                    joinsCoordinates, output, nthreads);
+} else {*/
+        LOG(TRACEL) << "Executing mergejoin.";
+        mergejoin(t1, naiver, outputLiterals, literal, min, max,
+                joinsCoordinates, output, nthreads);
 #ifdef DEBUG
-            output->checkSizes();
+        output->checkSizes();
 #endif
         /*}*/
-    }
+        }
 }
 
 bool JoinExecutor::isJoinSelective(JoinHashMap & map, const Literal & literal,
@@ -1387,17 +1387,13 @@ void JoinExecutor::mergejoin(const FCInternalTable * t1, SemiNaiver * naiver,
 
 }
 
-void JoinExecutor::do_merge_join_classicalgo(FCInternalTableItr * sortedItr1,
+void JoinExecutor::do_merge_join_classicalgo_cartesian_product(
+        FCInternalTableItr * sortedItr1,
         FCInternalTableItr * sortedItr2,
-        const std::vector<uint8_t> &fields1,
-        const std::vector<uint8_t> &fields2,
-        const uint8_t posBlocks,
-        const Term_t *valBlocks,
-        Output * output) {
-
-    std::chrono::system_clock::time_point startL = std::chrono::system_clock::now();
-
-    //Classic merge join
+        Output *output)
+{
+    size_t total = 0;
+    size_t max = 65536;
     bool active1 = true;
     if (sortedItr1->hasNext()) {
         sortedItr1->next();
@@ -1411,74 +1407,234 @@ void JoinExecutor::do_merge_join_classicalgo(FCInternalTableItr * sortedItr1,
     } else {
         active2 = false;
     }
-    int res = 0;
 
-    size_t total = 0;
-    size_t max = 65536;
+    if (sortedItr1->getNColumns() == 0) {
+        assert(sortedItr2->getNColumns() != 0);
+        do {
+            output->processResults(0, sortedItr1, sortedItr2, false);
+            active2 = sortedItr2->hasNext();
+            if (active2) {
+                sortedItr2->next();
+            }
+        } while (active2);
+    } else if (sortedItr2->getNColumns() == 0) {
+        do {
+            output->processResults(0, sortedItr1, sortedItr2, false);
+            active1 = sortedItr1->hasNext();
+            if (active1) {
+                sortedItr1->next();
+            }
+        } while (active1);
+    } else {
+        // Cartesian product
+        // First draw the first iterator empty.
+        size_t count = 0;
+        std::vector<Term_t> rowsToJoin;
+        for (;;) {
+            for (uint8_t idxInItr = 0; idxInItr < sortedItr1->getNColumns();
+                    ++idxInItr) {
+                Term_t v1 = sortedItr1->getCurrentValue(idxInItr);
+                rowsToJoin.push_back(v1);
+            }
+            count++;
+            active1 = sortedItr1->hasNext();
+            if (active1) {
+                sortedItr1->next();
+            } else {
+                break;
+            }
+        }
 
-    //Special case. There is no merge join
-    if (fields1.size() == 0 && active1 && active2) {
-        if (sortedItr1->getNColumns() == 0) {
-            assert(sortedItr2->getNColumns() != 0);
-            do {
-                output->processResults(0, sortedItr1, sortedItr2, false);
-                active2 = sortedItr2->hasNext();
-                if (active2) {
-                    sortedItr2->next();
-                }
-            } while (active2);
-        } else if (sortedItr2->getNColumns() == 0) {
-            do {
-                output->processResults(0, sortedItr1, sortedItr2, false);
-                active1 = sortedItr1->hasNext();
-                if (active1) {
-                    sortedItr1->next();
-                }
-            } while (active1);
-        } else {
-            // Cartesian product
-            // First draw the first iterator empty.
-            size_t count = 0;
-            std::vector<Term_t> rowsToJoin;
-            for (;;) {
-                for (uint8_t idxInItr = 0; idxInItr < sortedItr1->getNColumns();
-                        ++idxInItr) {
-                    Term_t v1 = sortedItr1->getCurrentValue(idxInItr);
-                    rowsToJoin.push_back(v1);
-                }
-                count++;
-                active1 = sortedItr1->hasNext();
-                if (active1) {
-                    sortedItr1->next();
-                } else {
-                    break;
-                }
+        // Then, add results one by one.
+        const Term_t *rowsSortedItr1 = &rowsToJoin[0];
+        for (;;) {
+            for (size_t i = 0; i < count; i++) {
+                output->processResults(0, rowsSortedItr1, sortedItr2, false);
+                rowsSortedItr1 += sortedItr1->getNColumns();
+            }
+            total += count;
+
+            while (total >= max) {
+                LOG(TRACEL) << "Count = " << count << ", total = " << total;
+                max = max + max;
             }
 
-            // Then, add results one by one.
-            const Term_t *rowsSortedItr1 = &rowsToJoin[0];
-            for (;;) {
-                for (size_t i = 0; i < count; i++) {
-                    output->processResults(0, rowsSortedItr1, sortedItr2, false);
-                    rowsSortedItr1 += sortedItr1->getNColumns();
-                }
-                total += count;
-
-                while (total >= max) {
-                    LOG(TRACEL) << "Count = " << count << ", total = " << total;
-                    max = max + max;
-                }
-
-                active2 = sortedItr2->hasNext();
-                if (active2) {
-                    sortedItr2->next();
-                } else {
-                    break;
-                }
+            active2 = sortedItr2->hasNext();
+            if (active2) {
+                sortedItr2->next();
+            } else {
+                break;
             }
         }
     }
+}
 
+void JoinExecutor::do_merge_join_classicalgo_hints2(
+        FCInternalTableItr * sortedItr1,
+        FCInternalTableItr * sortedItr2,
+        const std::vector<uint8_t> &fields1,
+        const std::vector<uint8_t> &fields2,
+        const uint8_t posBlocks,
+        const Term_t *valBlocks,
+        Output *output)
+{
+    int res = 0;
+    size_t total = 0;
+    size_t max = 65536;
+
+    //Classic merge join
+    bool active1 = true;
+    if (sortedItr1->hasNext()) {
+        sortedItr1->next();
+    } else {
+        active1 = false;
+    }
+    if (!active1) return;
+    bool active2 = true;
+    if (sortedItr2->hasNext()) {
+        Term_t h1 = sortedItr1->getCurrentValue(fields1[0]);
+        Term_t h2 = sortedItr1->getCurrentValue(fields1[1]);
+        sortedItr2->next(h1, h2);
+    } else {
+        active2 = false;
+    }
+
+    std::chrono::system_clock::time_point startL = std::chrono::system_clock::now();
+    while (active1 && active2) {
+        //Are they matching?
+        res = JoinExecutor::cmp(sortedItr1, sortedItr2, fields1, fields2);
+        while (res < 0 && sortedItr1->hasNext()) {
+            sortedItr1->next();
+            res = JoinExecutor::cmp(sortedItr1, sortedItr2, fields1, fields2);
+        }
+
+        if (res < 0) //The first iterator is finished
+            break;
+
+        while (res > 0 && sortedItr2->hasNext()) {
+            Term_t h1 = sortedItr1->getCurrentValue(fields1[0]);
+            Term_t h2 = sortedItr1->getCurrentValue(fields1[1]);
+            sortedItr2->next(h1, h2);
+            res = JoinExecutor::cmp(sortedItr1, sortedItr2, fields1, fields2);
+        }
+
+        if (res > 0) { //The second iterator is finished
+            break;
+        } else if (res < 0) {
+            if (sortedItr1->hasNext()) {
+                sortedItr1->next();
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        assert(res == 0);
+
+        //Go to the end of the first iterator
+        uint32_t count = 1;
+        std::vector<Term_t> rowsToJoin;
+        for (uint8_t idxInItr = 0; idxInItr < sortedItr1->getNColumns();
+                ++idxInItr) {
+            Term_t v1 = sortedItr1->getCurrentValue(idxInItr);
+            rowsToJoin.push_back(v1);
+        }
+
+        active1 = sortedItr1->hasNext();
+        while (active1) {
+            sortedItr1->next();
+            if (!sortedItr1->sameAs(rowsToJoin, fields1))
+                break;
+            for (uint8_t idxInItr = 0; idxInItr < sortedItr1->getNColumns();
+                    ++idxInItr) {
+                Term_t v1 = sortedItr1->getCurrentValue(idxInItr);
+                rowsToJoin.push_back(v1);
+            }
+            count++;
+            active1 = sortedItr1->hasNext();
+        }
+
+        do {
+            uint8_t idxBlock = 0;
+            const Term_t *rowsSortedItr1 = &rowsToJoin[0];
+            for (size_t i = 0; i < count; i++) {
+                if (valBlocks != NULL) {
+                    Term_t currentValue = rowsSortedItr1[posBlocks];
+                    while (valBlocks[idxBlock] < currentValue) {
+                        idxBlock++;
+                    }
+                    assert(currentValue == valBlocks[idxBlock]);
+                }
+                output->processResults(idxBlock, rowsSortedItr1, sortedItr2, false);
+                rowsSortedItr1 += sortedItr1->getNColumns();
+            }
+            total += count;
+
+            while (total >= max) {
+                LOG(TRACEL) << "Count = " << count << ", total = " << total;
+                max = max + max;
+            }
+
+            if (!sortedItr2->hasNext() || !active1) {
+                break;
+            } else {
+                Term_t h1 = sortedItr1->getCurrentValue(fields1[0]);
+                Term_t h2 = sortedItr1->getCurrentValue(fields1[1]);
+                sortedItr2->next(h1, h2);
+            }
+        } while (JoinExecutor::cmp(rowsToJoin, sortedItr2, fields1, fields2) == 0);
+    }
+    LOG(TRACEL) << "Total = " << total;
+#if DEBUG
+    std::chrono::duration<double> secL = std::chrono::system_clock::now() - startL;
+    LOG(TRACEL) << "do_merge_join: time loop: " << secL.count() * 1000 << ", fields.size()=" << fields1.size();
+#endif
+
+}
+
+void JoinExecutor::do_merge_join_classicalgo(FCInternalTableItr * sortedItr1,
+        FCInternalTableItr * sortedItr2,
+        const std::vector<uint8_t> &fields1,
+        const std::vector<uint8_t> &fields2,
+        const uint8_t posBlocks,
+        const Term_t *valBlocks,
+        Output * output) {
+
+    //Special case. There is no merge join
+    if (fields1.size() == 0) {
+        do_merge_join_classicalgo_cartesian_product(
+                sortedItr1, sortedItr2, output);
+        return;
+    }
+
+    if (fields1.size() == 2) {
+        do_merge_join_classicalgo_hints2(
+                sortedItr1, sortedItr2, fields1, fields2,
+                posBlocks, valBlocks, output);
+        return;
+    }
+
+    int res = 0;
+    size_t total = 0;
+    size_t max = 65536;
+    assert(!fields1.empty() && !fields2.empty());
+
+    //Classic merge join
+    bool active1 = true;
+    if (sortedItr1->hasNext()) {
+        sortedItr1->next();
+    } else {
+        active1 = false;
+    }
+    if (!active1) return;
+    bool active2 = true;
+    if (sortedItr2->hasNext()) {
+        sortedItr2->next();
+    } else {
+        active2 = false;
+    }
+
+    std::chrono::system_clock::time_point startL = std::chrono::system_clock::now();
     while (active1 && active2) {
         //Are they matching?
         res = JoinExecutor::cmp(sortedItr1, sortedItr2, fields1, fields2);
@@ -1992,44 +2148,23 @@ void JoinExecutor::do_mergejoin(const FCInternalTable * filteredT1,
         totalsize2 += sz;
     }
 
-    //It can be that there are no fields to join.
-
     //Sort t1
     if (fieldsToSortInMap.size() > 0) {
-        sortedItr1 = (InmemoryFCInternalTableItr*)filteredT1->sortBy(fieldsToSortInMap, nthreads);
+        sortedItr1 = (InmemoryFCInternalTableItr*)filteredT1->sortBy(
+                fieldsToSortInMap, nthreads);
     } else {
         sortedItr1 = (InmemoryFCInternalTableItr*)filteredT1->getIterator();
     }
 
-    /*
-       std::vector<std::shared_ptr<Column>> cols = sortedItr1->getAllColumns();
-
-       bool vectorSupported = true;
-       int ncols = (int) sortedItr1->getNColumns();
-       for (int i = 0; i < ncols; i++) {
-       if (! cols[i]->isBackedByVector()) {
-       vectorSupported = false;
-       break;
-       }
-       }
-       */
-
     std::vector<const std::vector<Term_t> *> vectors;
     vectors = sortedItr1->getAllVectors(nthreads);
-
     size_t totalsize1 = filteredT1->getNRows();
 
-    // if (vectorSupported) {
     // Possibility to parallelize, but also a possibility to create a faster
     // iterator.
     if (nthreads > 1) {
-        // chunks = (totalsize1 + nthreads - 1) / nthreads;
         chunks = (totalsize1 + 2 * nthreads - 1) / (2 * nthreads);
     }
-    // for (int i = 0; i < ncols; i++) {
-    // vectors.push_back(&cols[i]->getVectorRef());
-    // }
-    // }
     VectorFCInternalTableItr *itr1 = new VectorFCInternalTableItr(vectors, 0, totalsize1);
 
     secS = std::chrono::system_clock::now() - startS;
@@ -2063,35 +2198,25 @@ void JoinExecutor::do_mergejoin(const FCInternalTable * filteredT1,
             sortedItr2 = t2->getIterator();
         }
         bool vector2Supported = true;
-        std::vector<const std::vector<Term_t> *> vectors2 = sortedItr2->getAllVectors(nthreads);
-        /*
-           std::vector<std::shared_ptr<Column>> cols = sortedItr2->getAllColumns();
-           int ncols = (int) sortedItr2->getNColumns();
-           for (int i = 0; i < ncols; i++) {
-           if (! cols[i]->isBackedByVector()) {
-           vector2Supported = false;
-           break;
-           }
-           }
-           if (vector2Supported) {
-           for (int i = 0; i < ncols; i++) {
-           vectors2.push_back(&cols[i]->getVectorRef());
-           }
-           }
-           */
+        std::vector<const std::vector<Term_t> *> vectors2;// = sortedItr2->getAllVectors(nthreads);
+        std::vector<std::shared_ptr<Column>> cols = sortedItr2->getAllColumns();
+        int ncols = (int) sortedItr2->getNColumns();
+        for (int i = 0; i < ncols; i++) {
+            if (!cols[i]->isBackedByVector()) {
+                vector2Supported = false;
+                break;
+            }
+        }
+        if (vector2Supported) {
+            for (int i = 0; i < ncols; i++) {
+                vectors2.push_back(&cols[i]->getVectorRef());
+            }
+        }
+
         secS = std::chrono::system_clock::now() - startS;
         FCInternalTableItr *itr2 = sortedItr2;
-        size_t t2Size = 0;
-        if (vectors2.size() == 0) {
-            if (t2->isEmpty())
-                t2Size = 0;
-            else
-                t2Size = 1;
-        } else {
-            t2Size = vectors2[0]->size();
-        }
-        assert(t2->getNRows() == t2Size);
-        if (faster) {
+        size_t t2Size = t2->getNRows();
+        if (faster && vector2Supported) {
             sortedItr2 = new VectorFCInternalTableItr(vectors2, 0, t2Size);
             LOG(TRACEL) << "Faster algo";
             JoinExecutor::do_merge_join_fasteralgo(itr1, sortedItr2, fields1,
@@ -2104,34 +2229,41 @@ void JoinExecutor::do_mergejoin(const FCInternalTable * filteredT1,
         } else {
             LOG(TRACEL) << "Classical algo";
             LOG(TRACEL) << "totalsize1 = " << totalsize1 << ", t2Size = " << t2Size;
-            if (/* vectorSupported && */ nthreads > 1 && totalsize1 > 1 && (totalsize1 + t2Size) > 4096 /* ? */) {
+            if (vector2Supported && nthreads > 1 && totalsize1 > 1 && (totalsize1 + t2Size) > 4096) {
                 LOG(TRACEL) << "Chunk size = " << chunks << ", t2->getNRows() = " << t2Size;
                 if (vector2Supported) {
-                    //tbb::parallel_for(tbb::blocked_range<int>(0, totalsize1, chunks),
-                    //        CreateParallelMergeJoinerVectors(vectors, vectors2, fields1, fields2, posBlocks, nValBlocks, valBlocks, output, &m));
                     ParallelTasks::parallel_for(0, totalsize1, chunks,
                             CreateParallelMergeJoinerVectors(vectors, vectors2,
                                 fields1, fields2, posBlocks, nValBlocks,
                                 valBlocks, output, &m));
                 } else {
-                    //tbb::parallel_for(tbb::blocked_range<int>(0, totalsize1, chunks),
-                    //        CreateParallelMergeJoiner(vectors, sortedItr2, fields1, fields2, posBlocks, nValBlocks, valBlocks, output, &m));
                     ParallelTasks::parallel_for(0, totalsize1, chunks,
                             CreateParallelMergeJoiner(vectors, sortedItr2,
                                 fields1, fields2, posBlocks, nValBlocks,
                                 valBlocks, output, &m));
                 }
             } else {
-                JoinExecutor::do_merge_join_classicalgo(vectors, 0, totalsize1,
-                        vectors2, 0, t2Size,
-                        fields1, fields2,
-                        posBlocks, valBlocks, out);
+                if (vector2Supported) {
+                    JoinExecutor::do_merge_join_classicalgo(vectors, 0, totalsize1,
+                            vectors2, 0, t2Size,
+                            fields1, fields2,
+                            posBlocks, valBlocks, out);
+                } else {
+                    //Join if the second relation is not backed by vectors
+                    JoinExecutor::do_merge_join_classicalgo(
+                            sortedItr1,
+                            itr2,
+                            fields1, fields2,
+                            posBlocks, valBlocks, out);
+
+                }
             }
 #if DEBUG
             output->checkSizes();
 #endif
         }
-        itr2->deleteAllVectors(vectors2);
+        if (vector2Supported)
+            itr2->deleteAllVectors(vectors2);
         t2->releaseIterator(itr2);
     }
     delete itr1;

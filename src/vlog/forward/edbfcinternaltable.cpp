@@ -220,6 +220,12 @@ inline void EDBFCInternalTableItr::next() {
     compiled = false;
 }
 
+inline void EDBFCInternalTableItr::next(Term_t hint1, Term_t hint2)
+{
+    edbItr->next(hint1, hint2);
+    compiled = false;
+}
+
 uint8_t EDBFCInternalTableItr::getNColumns() const {
     return nfields;
 }

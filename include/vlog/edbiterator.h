@@ -9,6 +9,11 @@ class EDBIterator {
 
         virtual void next() = 0;
 
+        virtual void next(Term_t hint1, Term_t hint2)
+        {
+            next();
+        }
+
         virtual Term_t getElementAt(const uint8_t p) = 0;
 
         virtual PredId_t getPredicateID() = 0;
@@ -25,7 +30,8 @@ class EDBIterator {
             return NULL;
         }
 
-        virtual std::pair<uint8_t, std::pair<uint8_t, uint8_t>> getSizeElemUnderlyingArray(uint8_t column) {
+        virtual std::pair<uint8_t, std::pair<uint8_t, uint8_t>>
+            getSizeElemUnderlyingArray(uint8_t column) {
             return std::make_pair(0, std::make_pair(0, 0));
         }
 

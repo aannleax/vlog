@@ -265,10 +265,28 @@ class JoinExecutor {
                 const Term_t *valBlocks,
                 ResultJoinProcessor *output);
 
-        static void do_mergejoin(const FCInternalTable *filteredT1, std::vector<uint8_t> &fieldsToSortInMap,
+        static void do_mergejoin(const FCInternalTable *filteredT1,
+                std::vector<uint8_t> &fieldsToSortInMap,
                 std::vector<std::shared_ptr<const FCInternalTable>> &tables2,
-                const std::vector<uint8_t> &fields1, const uint8_t *posOtherVars, const std::vector<Term_t> *valuesOtherVars,
-                const std::vector<uint8_t> &fields2, ResultJoinProcessor *output, int nthreads);
+                const std::vector<uint8_t> &fields1, const uint8_t *posOtherVars,
+                const std::vector<Term_t> *valuesOtherVars,
+                const std::vector<uint8_t> &fields2,
+                ResultJoinProcessor *output,
+                int nthreads);
+
+        static void do_merge_join_classicalgo_cartesian_product(
+                FCInternalTableItr * sortedItr1,
+                FCInternalTableItr * sortedItr2,
+                Output *output);
+
+        static void do_merge_join_classicalgo_hints2(
+                FCInternalTableItr * sortedItr1,
+                FCInternalTableItr * sortedItr2,
+                const std::vector<uint8_t> &fields1,
+                const std::vector<uint8_t> &fields2,
+                const uint8_t posBlocks,
+                const Term_t *valBlocks,
+                Output *output);
 
     public:
         static void do_merge_join_classicalgo(FCInternalTableItr *sortedItr1,
@@ -279,7 +297,8 @@ class JoinExecutor {
                 const Term_t *valBlocks,
                 Output *output);
 
-        static void do_merge_join_classicalgo(const std::vector<const std::vector<Term_t> *> &vectors1,
+        static void do_merge_join_classicalgo(
+                const std::vector<const std::vector<Term_t> *> &vectors1,
                 size_t l1, size_t u1,
                 const std::vector<const std::vector<Term_t> *> &vectors2,
                 size_t l2, size_t u2,
@@ -327,12 +346,12 @@ class JoinExecutor {
                 ResultJoinProcessor * output, int nthreads);
 
         static void left_join(const FCInternalTable * filteredT1,
-               std::vector<uint8_t> &fieldsToSortInMap,
-               std::vector<std::shared_ptr<const FCInternalTable>> &tables2,
-               const std::vector<uint8_t> &fields1, const uint8_t *posOtherVars,
-               const std::vector<Term_t> *valuesOtherVars,
-               const std::vector<uint8_t> &fields2, ResultJoinProcessor * output,
-               int nthreads);
+                std::vector<uint8_t> &fieldsToSortInMap,
+                std::vector<std::shared_ptr<const FCInternalTable>> &tables2,
+                const std::vector<uint8_t> &fields1, const uint8_t *posOtherVars,
+                const std::vector<Term_t> *valuesOtherVars,
+                const std::vector<uint8_t> &fields2, ResultJoinProcessor * output,
+                int nthreads);
 
         static void do_left_join(const std::vector<const std::vector<Term_t> *> &vectors1,
                 const std::vector<const std::vector<Term_t> *> &vectors2,

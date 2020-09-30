@@ -8,6 +8,10 @@
 
 class ProbNETable: public EDBTable
 {
+    private:
+        PredId_t predid;
+        std::string predname;
+
     public:
         ProbNETable(PredId_t predid, std::string predname);
 
@@ -41,6 +45,8 @@ class ProbNETable: public EDBTable
         uint64_t getSize();
 
         void releaseIterator(EDBIterator *itr);
+
+        bool expensiveLayer();
 
         uint8_t getArity() const;
 

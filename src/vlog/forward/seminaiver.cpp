@@ -617,7 +617,7 @@ void SemiNaiver::storeOnFile(std::string path, const PredId_t pred, const bool d
 
     if (table != NULL && !table->isEmpty()) {
         FCIterator itr = table->read(0);
-        if (! itr.isEmpty()) {
+        if (!itr.isEmpty()) {
             const uint8_t sizeRow = table->getSizeRow();
             while (!itr.isEmpty()) {
                 std::shared_ptr<const FCInternalTable> t = itr.getCurrentTable();
@@ -701,7 +701,7 @@ void SemiNaiver::storeOnFiles(std::string path, const bool decompress,
     //I create a new file for every idb predicate
     for (PredId_t i = 0; i < program->getNPredicates(); ++i) {
         FCTable *table = predicatesTables[i];
-        if (table != NULL && !table->isEmpty()) {
+        if (program->isPredicateIDB(i) && table != NULL && !table->isEmpty()) {
             storeOnFile(path + "/" + generateFileName(program->getPredicateName(i)), i, decompress, minLevel, csv);
         }
     }

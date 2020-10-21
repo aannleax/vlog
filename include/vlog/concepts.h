@@ -225,6 +225,7 @@ class Predicate {
 
         static uint8_t calculateAdornment(VTuple &t) {
             uint8_t adornment = 0;
+            assert(t.getSize() <= 8);
             for (size_t i = 0; i < t.getSize(); ++i) {
                 if (!t.get(i).isVariable()) {
                     adornment += 1 << i;

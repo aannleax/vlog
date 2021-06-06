@@ -3,13 +3,13 @@
 ctime -begin CTime.txt
 
 set Name=vlog
-set Core=..\src\vlog\*.cpp ..\src\vlog\common\*.cpp ..\src\vlog\backward\*.cpp ..\src\vlog\forward\*.cpp ..\src\vlog\magic\*.cpp ..\src\vlog\inmemory\*.cpp ..\src\vlog\trident\*.cpp ..\src\vlog\cycles\*.cpp ..\src\vlog\ml\*.cpp ..\src\vlog\deps\*.cpp ..\src\launcher\vloglayer.cpp ..\src\launcher\vlogscan.cpp
+set Core=..\src\vlog\*.cpp ..\src\vlog\reliances\*.cpp ..\src\vlog\common\*.cpp ..\src\vlog\backward\*.cpp ..\src\vlog\forward\*.cpp ..\src\vlog\magic\*.cpp ..\src\vlog\inmemory\*.cpp ..\src\vlog\trident\*.cpp ..\src\vlog\cycles\*.cpp ..\src\vlog\ml\*.cpp ..\src\vlog\deps\*.cpp ..\src\launcher\vloglayer.cpp ..\src\launcher\vlogscan.cpp
 set Main=..\src\launcher\main.cpp
 
-set ZLibPath=..\..\zlib
-set CurlPath=..\..\curl
-set Lz4Path=..\..\lz4
-set SparsehashPath=..\..\sparsehash
+set ZLibPath=..\..\Libraries\zlib
+set CurlPath=..\..\Libraries\curl-static
+set Lz4Path=..\..\Libraries\lz4
+set SparsehashPath=..\..\Libraries\sparsehash
 set KognacPath=..\..\kognac
 set TridentPath=..\..\trident
 
@@ -29,7 +29,13 @@ IF "%~1" == "clean" (
   popd
 
   pushd build-core
-    @del /q * 2>NUL
+    @del /q *.exe 2>NUL
+    @del /q *.dll 2>NUL
+    @del /q *.lib 2>NUL
+    @del /q *.pdb 2>NUL
+    @del /q *.ilk 2>NUL
+    @del /q *.exp 2>NUL
+    @del /q *.obj 2>NUL
   popd
 
   echo Build folder clean
@@ -51,7 +57,7 @@ IF "%~1" == "release" (
   set VersionSuffix=d
 )
 
-set CompilerFlags=-nologo -Zi -EHsc -W0 -std:c11 -MT%VersionSuffix% %Optimization%
+set CompilerFlags=-nologo -Zi -EHsc -W0 -std:c11 -MD%VersionSuffix% %Optimization%
 set LinkerFlags=
 set Libraries=%ZLibPath%\lib\zlib%VersionSuffix%.lib %Lz4Path%\lib\lz4%VersionSuffix%.lib %CurlPath%\lib\libcurl%VersionSuffix%.lib %KognacPath%\win64\x64\%Version%\kognac-core.lib %TridentPath%\win64\x64\%Version%\trident-core.lib %TridentPath%\win64\x64\%Version%\trident-sparql.lib
 set Includes=-I..\include -I%SparsehashPath%\src -I%ZLibPath%\include -I%Lz4Path%\include -I%CurlPath%\include -I%KognacPath%\include -I%TridentPath%\include -I%TridentPath%\rdf3x\include
@@ -64,6 +70,8 @@ pushd build-core
   @copy %KognacPath%\win64\x64\%Version%\kognac-core.dll ..\build\kognac-core.dll
   @copy %TridentPath%\win64\x64\%Version%\trident-core.dll ..\build\trident-core.dll
   @copy %TridentPath%\win64\x64\%Version%\trident-sparql.dll ..\build\trident-sparql.dll
+  @copy %ZLibPath%\bin\zlib%VersionSuffix%1.dll ..\build\zlib%VersionSuffix%1.dll
+  @copy %Lz4Path%\bin\lz4%VersionSuffix%.dll ..\build\lz4%VersionSuffix%.dll
   @copy %Name%-core.dll ..\build\%Name%-core.dll
 popd
 

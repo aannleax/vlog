@@ -59,6 +59,9 @@ void RuleExecutionDetails::groupLiteralsBySharedVariables(std::vector<Var_t> &st
         if (set[0]->getSharedVars(startVars).size() == 0) {
             leftelements.push_back(set[0]);
             set.clear();
+
+            //After the set has been cleared it is unwise to call set[0]
+            return;
         }
         std::vector<Var_t> newVars = set[0]->getNewVars(startVars);
         std::copy(newVars.begin(), newVars.end(), std::back_inserter(startVars));

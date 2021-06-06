@@ -250,6 +250,8 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Set maximum number of threads to use when run in multithreaded mode. Default is " + to_string(std::max((unsigned int)1, std::thread::hardware_concurrency() / 2)), false);
     query_options.add<int>("", "interRuleThreads", 0,
             "Set maximum number of threads to use for inter-rule parallelism. Default is 0", false);
+    query_options.add<bool>("", "ordered", false, 
+            "Whether or not to use the ordered version of the seminaive algorithm.", false);
 
     query_options.add<bool>("", "shufflerules", false,
             "shuffle rules randomly instead of using heuristics (only for <mat>, and only when running multithreaded).", false);
@@ -597,7 +599,9 @@ void launchFullMat(int argc,
                 ? TypeChase::RESTRICTED_CHASE : TypeChase::SKOLEM_CHASE,
                 nthreads,
                 interRuleThreads,
-                vm["shufflerules"].as<bool>());
+                vm["shufflerules"].as<bool>(),
+                NULL,
+                vm["ordered"].as<bool>());
 
 #ifdef WEBINTERFACE
         //Start the web interface if requested

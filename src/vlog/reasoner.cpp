@@ -1,6 +1,7 @@
 #include <vlog/seminaiver.h>
 #include <vlog/seminaiver_threaded.h>
 #include <vlog/seminaiver_trigger.h>
+#include <vlog/seminaiver_ordered.h>
 #include <vlog/wizard.h>
 #include <vlog/reasoner.h>
 #include <vlog/concepts.h>
@@ -919,7 +920,8 @@ TupleIterator *Reasoner::getTopDownIterator(Literal &query,
 std::shared_ptr<SemiNaiver> Reasoner::getSemiNaiver(EDBLayer &layer,
         Program *p, bool opt_intersect, bool opt_filtering, bool opt_threaded,
         TypeChase typeChase,
-        int nthreads, int interRuleThreads, bool shuffleRules, Program *restrictedCheck) {
+        int nthreads, int interRuleThreads, bool shuffleRules, Program *restrictedCheck,
+        bool ordered) {
     LOG(DEBUGL) << "interRuleThreads = " << interRuleThreads << ", shuffleRules = " << shuffleRules;
     if (interRuleThreads > 0 && restrictedCheck == NULL) {
         std::shared_ptr<SemiNaiver> sn(new SemiNaiverThreaded(
@@ -927,10 +929,20 @@ std::shared_ptr<SemiNaiver> Reasoner::getSemiNaiver(EDBLayer &layer,
                     shuffleRules, nthreads, interRuleThreads));
         return sn;
     } else {
-        std::shared_ptr<SemiNaiver> sn(new SemiNaiver(
+        if (!ordered)
+        {
+            std::shared_ptr<SemiNaiver> sn(new SemiNaiver(
                     layer, p, opt_intersect, opt_filtering,
                     opt_threaded, typeChase, nthreads, shuffleRules, false, restrictedCheck));
-        return sn;
+            return sn;
+        }
+        else
+        {
+            std::shared_ptr<SemiNaiverOrdered> sn(new SemiNaiverOrdered(
+                    layer, p, opt_intersect, opt_filtering,
+                    opt_threaded, typeChase, nthreads, shuffleRules, false, restrictedCheck));
+            return sn;
+        }
     }
 }
 

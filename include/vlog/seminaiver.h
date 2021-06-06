@@ -206,7 +206,7 @@ class SemiNaiver {
 
         virtual FCTable *getTable(const PredId_t pred, const int card);
 
-        VLIBEXP void run(size_t lastIteration,
+        VLIBEXP virtual void run(size_t lastIteration,
                 size_t iteration,
                 unsigned long *timeout = NULL,
                 bool checkCyclicTerms = false,

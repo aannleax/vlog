@@ -456,7 +456,7 @@ static std::vector<uint8_t> __mergeSortingFields(std::vector<uint8_t> v1,
     }
 }
 
-static uint64_t __getKeyFromFields(const std::vector<uint8_t> &fields, uint8_t sz) {
+static uint64_t __getKeyFromFieldsIm(const std::vector<uint8_t> &fields, uint8_t sz) {
     assert(sz <= 8);
     uint64_t key = 0;
     for(uint8_t i = 0; i < sz; ++i) {
@@ -496,7 +496,7 @@ std::shared_ptr<const Segment> InmemoryTable::getSortedCachedSegment(
         //if we already have one in the cache that is say, sorted on fields 1, 2, 3
         //and we now require sorted on fields 1, 2, then the one sorted on fields 1, 2, 3
         //meets the requirement.
-        uint64_t filterByKey = __getKeyFromFields(sortBy, sortBy.size());
+        uint64_t filterByKey = __getKeyFromFieldsIm(sortBy, sortBy.size());
         if (cachedSortedSegments.count(filterByKey)) {
             LOG(DEBUGL) << "Found sorted segment in cache";
             sortedSegment = cachedSortedSegments[filterByKey];
@@ -537,7 +537,7 @@ std::shared_ptr<const Segment> InmemoryTable::getSortedCachedSegment(
             //this one is also sorted on fields 1, 2, and also sorted on field 1.
             //So, we add those to the hashtable as well.
             for (int i = 0; i < sb.size(); i++) {
-                filterByKey = __getKeyFromFields(sb, i+1);
+                filterByKey = __getKeyFromFieldsIm(sb, i+1);
                 cachedSortedSegments[filterByKey] = sortedSegment;
             }
         }
@@ -605,7 +605,7 @@ EDBIterator *InmemoryTable::getSortedIterator2(const Literal &query,
         }
         filterBy = __mergeSortingFields(filterBy, fields);
         // Now get the key of the entry we need.
-        uint64_t keySortFields = __getKeyFromFields(filterBy, filterBy.size() >= 8 ? 7 : filterBy.size());
+        uint64_t keySortFields = __getKeyFromFieldsIm(filterBy, filterBy.size() >= 8 ? 7 : filterBy.size());
         // Fill the sort fields up with the other fields.
         if (filterBy.size() < arity) {
             for (int i = 0; i < arity; i++) {
@@ -653,7 +653,7 @@ EDBIterator *InmemoryTable::getSortedIterator2(const Literal &query,
                 if (i >= 8) {
                     break;
                 }
-                keySortFields = __getKeyFromFields(filterBy, i);
+                keySortFields = __getKeyFromFieldsIm(filterBy, i);
                 if (! cacheHashes.count(keySortFields)) {
                     cacheHashes.insert(std::make_pair(keySortFields, map));
                 }

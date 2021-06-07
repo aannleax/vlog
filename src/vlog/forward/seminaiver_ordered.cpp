@@ -27,5 +27,11 @@ void SemiNaiverOrdered::run(size_t lastIteration,
     int singleRule,
     PredId_t predIgnoreBlock)
 {
+    std::cout << "Rules.tostring():" << std::endl;
+    for (Rule &currentRule: program->getAllRules())
+    {
+        std::cout << currentRule.tostring() << std::endl;
+    }
+
     std::cout << "Running function run from SemiNavierOrdered" << std::endl;
 }

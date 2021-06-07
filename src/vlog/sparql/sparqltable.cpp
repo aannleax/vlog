@@ -296,7 +296,7 @@ EDBIterator *SparqlTable::getIterator(const Literal &query) {
     return new SparqlIterator(output, layer, query, fieldVars);
 }
 
-static uint64_t __getKeyFromFields(const std::vector<uint8_t> &fields) {
+static uint64_t __getKeyFromFieldsS(const std::vector<uint8_t> &fields) {
     assert(fields.size() <= 8);
     uint64_t key = 0;
     for(uint8_t i = 0; i < fields.size(); ++i) {
@@ -320,7 +320,7 @@ EDBIterator *SparqlTable::getSortedIterator(const Literal &query,
     uint64_t key = 0;
     if (sz <= 8 && query.getNUniqueVars() == sz) {
         // See if we can find it in the cache.
-        key = __getKeyFromFields(fields);
+        key = __getKeyFromFieldsS(fields);
         if (cachedSegments.count(key)) {
             auto segment = cachedSegments[key];
             return new InmemoryIterator(segment, predid, fields);

@@ -757,7 +757,7 @@ FCInternalTableItr *InmemoryFCInternalTable::getSortedIterator(int nthreads) con
 }
 
 #if INMEMINTERNALCACHE
-static uint32_t __getKeyFromFields(const std::vector<uint8_t> &fields, uint8_t sz) {
+static uint32_t __getKeyFromFieldsFc(const std::vector<uint8_t> &fields, uint8_t sz) {
     uint32_t key = 0;
     for(uint8_t i = 0; i < sz; ++i) {
         uint8_t field = fields[i];
@@ -790,7 +790,7 @@ FCInternalTableItr *InmemoryFCInternalTable::sortBy(const std::vector<uint8_t> &
     } else {
 #if INMEMINTERNALCACHE
         if (fields.size() <= 3) {
-            uint64_t filterByKey = __getKeyFromFields(fields, fields.size());
+            uint64_t filterByKey = __getKeyFromFieldsFc(fields, fields.size());
             if (cachedSorted.count(filterByKey)) {
                 sortedValues = cachedSorted[filterByKey];
             } else {
@@ -801,7 +801,7 @@ FCInternalTableItr *InmemoryFCInternalTable::sortBy(const std::vector<uint8_t> &
                 //this one is also sorted on fields 1, 2, and also sorted on field 1.
                 //So, we add those to the hashtable as well.
                 for (int i = 1; i < fields.size(); i++) {
-                    filterByKey = __getKeyFromFields(fields, i);
+                    filterByKey = __getKeyFromFieldsFc(fields, i);
                     cachedSorted[filterByKey] = sortedValues;
                 }
             }
@@ -849,7 +849,7 @@ FCInternalTableItr *InmemoryFCInternalTable::sortBy(
     } else {
 #if INMEMINTERNALCACHE
         if (fields.size() <= 3) {
-            uint64_t filterByKey = __getKeyFromFields(fields, fields.size());
+            uint64_t filterByKey = __getKeyFromFieldsFc(fields, fields.size());
             if (cachedSorted.count(filterByKey)) {
                 sortedValues = cachedSorted[filterByKey];
             } else {
@@ -860,7 +860,7 @@ FCInternalTableItr *InmemoryFCInternalTable::sortBy(
                 //this one is also sorted on fields 1, 2, and also sorted on field 1.
                 //So, we add those to the hashtable as well.
                 for (int i = 1; i < fields.size(); i++) {
-                    filterByKey = __getKeyFromFields(fields, i);
+                    filterByKey = __getKeyFromFieldsFc(fields, i);
                     cachedSorted[filterByKey] = sortedValues;
                 }
             }

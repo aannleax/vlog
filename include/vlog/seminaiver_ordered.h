@@ -1,6 +1,7 @@
 #ifndef _SEMINAIVER_ORDERED_H
 #define _SEMINAIVER_ORDERED_H
 
+#include "vlog/reliances/reliances.h"
 #include <vlog/seminaiver.h>
 
 #include <vector>

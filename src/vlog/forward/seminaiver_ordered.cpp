@@ -1,5 +1,4 @@
 #include "vlog/seminaiver_ordered.h"
-#include "vlog/reliances/reliances.h"
 
 #include <iostream>
 #include <vector>
@@ -33,5 +32,15 @@ void SemiNaiverOrdered::run(size_t lastIteration,
         std::cout << currentRule.tostring() << std::endl;
     }
 
-    std::cout << "Running function run from SemiNavierOrdered" << std::endl;
+    std::cout << "Computing positive reliances..." << std::endl;
+    std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(program);
+
+    std::cout << "Positive reliances: " << std::endl;
+    for (unsigned from = 0; from < relianceGraphs.first.edges.size(); ++from)
+    {
+        for (unsigned to :  relianceGraphs.first.edges[from])
+        {
+            std::cout << "positive reliance: " << from << " -> " << to << std::endl;
+        }
+    }
 }

@@ -68,7 +68,7 @@ set CoreDefines=-DVLOG_SHARED_LIB -DWIN32  -DNDEBUG -DVLOGCORE_EXPORTS -D_WINDOW
 set Defines=-DWIN32 -DNDEBUG -D_CONSOLE -D_MBCS 
 
 pushd build-core
-  cl /bigobj /LD %CoreDefines% %Includes% %CompilerFlags% %Core% -Fe:%Name%-core.dll /link %LinkerFlags% %Libraries% 
+  cl /bigobj /LD %CoreDefines% %Includes% %CompilerFlags% %Core% -Fe:%Name%-core.dll /link %LinkerFlags% %Libraries%
 
   @copy %KognacPath%\win64\x64\%Version%\kognac-core.dll ..\build\kognac-core.dll
   @copy %TridentPath%\win64\x64\%Version%\trident-core.dll ..\build\trident-core.dll

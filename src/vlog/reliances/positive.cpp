@@ -430,8 +430,6 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(Program *progra
         //TODO: Good place to handle negation as well maybe
         Rule markedRule = markExistentialVariables(currentRule);
         markedRules.push_back(markedRule);
-
-        std::cout << markedRule.tostring() << std::endl;
     }
 
     for (unsigned ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)

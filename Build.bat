@@ -26,10 +26,6 @@ IF "%~1" == "clean" (
   echo Cleaning up...
 
   pushd build
-    @del /q * 2>NUL
-  popd
-
-  pushd build-core
     @del /q *.exe 2>NUL
     @del /q *.dll 2>NUL
     @del /q *.lib 2>NUL
@@ -37,6 +33,10 @@ IF "%~1" == "clean" (
     @del /q *.ilk 2>NUL
     @del /q *.exp 2>NUL
     @del /q *.obj 2>NUL
+  popd
+
+  pushd build-core
+    @del /q * 2>NUL
   popd
 
   echo Build folder clean

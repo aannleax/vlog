@@ -1,0 +1,1 @@
+vlog.exe mat --ordered 1 --rules ..\examples\test\positive_nulls_from\rules.dlog --edb ..\examples\test\positive_nulls_from\conf.conf

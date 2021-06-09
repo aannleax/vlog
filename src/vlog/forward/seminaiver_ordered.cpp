@@ -107,21 +107,62 @@ std::vector<std::vector<unsigned>> SemiNaiverOrdered::computeRelianceGroups(
     return result;
 }
 
-void SemiNaiverOrdered::run(size_t lastIteration,
+void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
+    const RelianceGraph &positiveGraph, const std::vector<std::vector<unsigned>> &groups,
+    std::vector<PositiveGroup> &positiveGroups)
+{
+    positiveGroups.resize(groups.size());
+
+    for (unsigned groupIndex = 0; groupIndex < groups.size(); ++groupIndex)
+    {
+        const std::vector<unsigned> &group = groups[groupIndex];
+        PositiveGroup &newGroup = positiveGroups[groupIndex];
+
+        newGroup.rules.reserve(group.size());
+
+        std::unordered_set<unsigned> successorSet;
+
+        for (unsigned ruleIndex : group)
+        {
+            const Rule &currentRule = allRules[ruleIndex];
+            newGroup.rules.emplace_back(currentRule, currentRule.getId());
+
+            newGroup.rules.back().createExecutionPlans(checkCyclicTerms);
+            newGroup.rules.back().calculateNVarsInHeadFromEDB();
+            newGroup.rules.back().lastExecution = lastExecution;
+        
+            for (unsigned successor : positiveGraph.edges[ruleIndex])
+            {
+                successorSet.insert(successor);
+            }
+        }
+
+        for (unsigned successor : successorSet)
+        {
+            newGroup.successors.push_back(&positiveGroups[0] + successor);
+        }
+    }
+}
+
+void SemiNaiverOrdered::run(size_t lastExecution,
     size_t iteration,
     unsigned long *timeout,
     bool checkCyclicTerm,
     int singleRule,
     PredId_t predIgnoreBlock)
 {
-    std::cout << "Rules.tostring():" << std::endl;
-    for (Rule &currentRule: program->getAllRules())
-    {
-        std::cout << currentRule.tostring() << std::endl;
-    }
+    this->checkCyclicTerms = checkCyclicTerms;
+    this->foundCyclicTerms = false;
+    this->predIgnoreBlock = predIgnoreBlock;
+    this->running = true;
+    this->iteration = iteration;
+    this->startTime = std::chrono::system_clock::now();
+    listDerivations.clear();
+
+    std::vector<Rule> &allRules = program->getAllRules();
 
     std::cout << "Computing positive reliances..." << std::endl;
-    std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(program);
+    std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(allRules);
 
     std::cout << "Positive reliances: " << std::endl;
     for (unsigned from = 0; from < relianceGraphs.first.edges.size(); ++from)
@@ -145,4 +186,11 @@ void SemiNaiverOrdered::run(size_t lastIteration,
     }
 
     std::cout << "Found " << relianceGroups.size() << " groups." << std::endl;
+
+    std::vector<StatIteration> costRules;
+
+    std::vector<PositiveGroup> positiveGroups;
+    prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGroups, positiveGroups);
+
+    this->running = false;
 }

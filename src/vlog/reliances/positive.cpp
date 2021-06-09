@@ -85,20 +85,6 @@ void positiveChangeGroup(std::vector<int64_t> &assignments, int64_t originalGrou
     }
 }
 
-void positiveAssignGroup(std::vector<Assignment> &assignments, int64_t group, int64_t newValue)
-{
-    if (group == NOT_ASSIGNED)
-        return;
-
-    for (Assignment &currentAssignment : assignments)
-    {
-        if (currentAssignment.group == group)
-        {
-            currentAssignment.value = newValue;
-        }
-    }
-}
-
 int64_t positiveGetAssignedConstant(VTerm term, 
     const std::vector<int64_t> &assignment, const std::vector<VariableAssignments::Group> &groups)
 {
@@ -434,9 +420,8 @@ bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
     return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 }
 
-std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(Program *program)
+std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rule> &rules)
 {
-    std::vector<Rule> rules = program->getAllRules();
     std::vector<Rule> markedRules;
     RelianceGraph result(rules.size()), resultTransposed(rules.size());
 

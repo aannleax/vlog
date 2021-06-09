@@ -6,9 +6,20 @@
 
 #include <vector>
 #include <stack>
+#include <unordered_set>
+#include <queue>
 
 class SemiNaiverOrdered: public SemiNaiver {
 public:
+    struct PositiveGroup
+    {
+        std::vector<RuleExecutionDetails> rules;
+        std::vector<PositiveGroup *> successors;
+
+        bool active = true; //can potentially be executed
+        bool triggered = true; //already in queue
+    };
+
     VLIBEXP SemiNaiverOrdered(EDBLayer &layer,
         Program *program, 
         bool opt_intersect,
@@ -31,6 +42,8 @@ private:
     void fillOrder(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
     void dfsUntil(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
     std::vector<std::vector<unsigned>> computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
+
+    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const std::vector<std::vector<unsigned>> &groups, std::vector<PositiveGroup> &positiveGroups);
 };
 
 #endif

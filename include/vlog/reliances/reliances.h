@@ -23,12 +23,6 @@ struct RelianceGraph
     }
 };
 
-struct Assignment
-{
-    int64_t group = NOT_ASSIGNED;
-    int64_t value = NOT_ASSIGNED;
-};
-
-std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(Program *program);
+std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rule> &rules);
 
 #endif

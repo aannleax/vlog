@@ -43,7 +43,8 @@ struct StatsSizeIDB {
 typedef std::unordered_map<std::string, FCTable*> EDBCache;
 class ResultJoinProcessor;
 class SemiNaiver {
-    private:
+    //private
+    protected:
         std::vector<RuleExecutionDetails> allEDBRules;
         bool opt_intersect;
         bool opt_filtering;

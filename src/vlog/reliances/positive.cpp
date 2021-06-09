@@ -2,13 +2,28 @@
 
 #include <vector>
 #include <utility>
+#include <list>
 
-struct PositiveVariableAssignments
+struct VariableAssignments
 {
-    std::vector<Assignment> from, to;
-};
+    VariableAssignments(unsigned variableCountFrom, unsigned variableCountTo)
+    {
+        from.resize(variableCountFrom, NOT_ASSIGNED);
+        to.resize(variableCountTo, NOT_ASSIGNED);
+    }
 
-int positiveGroupId = 0;
+    struct Group
+    {
+        Group() {}
+        Group(int64_t value) {this->value = value;}
+
+        int64_t value = NOT_ASSIGNED;
+        //TODO: Maybe should include members, so that groups can be changed more easily 
+    };
+
+    std::vector<Group> groups;
+    std::vector<int64_t> from, to;
+};
 
 Rule markExistentialVariables(const Rule &rule)
 {
@@ -59,17 +74,13 @@ unsigned highestLiteralsId(const std::vector<Literal> &literalVector)
     return result;
 }
 
-void positiveChangeGroup(std::vector<Assignment> &assignments, int64_t originalGroup, int64_t newGroup, int64_t newValue = NOT_ASSIGNED)
+void positiveChangeGroup(std::vector<int64_t> &assignments, int64_t originalGroup, int64_t newGroup)
 {
-    if (originalGroup == NOT_ASSIGNED)
-        return;
-
-    for (Assignment &currentAssignment : assignments)
+    for (int64_t &currentGroup : assignments)
     {
-        if (currentAssignment.group == originalGroup)
+        if (currentGroup == originalGroup)
         {
-            currentAssignment.group = newGroup;
-            currentAssignment.value = newValue;
+            currentGroup = newGroup;
         }
     }
 }
@@ -88,18 +99,22 @@ void positiveAssignGroup(std::vector<Assignment> &assignments, int64_t group, in
     }
 }
 
-int64_t positiveGetAssignedConstant(VTerm term, const std::vector<Assignment> &assignment)
+int64_t positiveGetAssignedConstant(VTerm term, 
+    const std::vector<int64_t> &assignment, const std::vector<VariableAssignments::Group> &groups)
 {
     if (term.getId() == 0)
         return term.getValue();
-    else if ((uint32_t)term.getId() < 0)
-        return term.getId();
+    else if ((int32_t)term.getId() < 0)
+        return (int32_t)term.getId();
     else 
-        return assignment[term.getId()].value;
+      if (assignment[term.getId()] == NOT_ASSIGNED)
+         return NOT_ASSIGNED;
+      else
+        return groups[assignment[term.getId()]].value;
 }
 
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
-    PositiveVariableAssignments &assignments)
+    VariableAssignments &assignments)
 {
     unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
 
@@ -108,8 +123,8 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
         VTerm fromTerm = literalFrom.getTermAtPos(termIndex);
         VTerm toTerm = literalTo.getTermAtPos(termIndex);
 
-        int64_t fromConstant = positiveGetAssignedConstant(fromTerm, assignments.from);
-        int64_t toConstant = positiveGetAssignedConstant(toTerm, assignments.to);
+        int64_t fromConstant = positiveGetAssignedConstant(fromTerm, assignments.from, assignments.groups);
+        int64_t toConstant = positiveGetAssignedConstant(toTerm, assignments.to, assignments.groups);
 
         if (fromConstant != NOT_ASSIGNED && toConstant != NOT_ASSIGNED)
         {
@@ -124,99 +139,100 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
         }
         else if ((int32_t)fromTerm.getId() > 0 && (int32_t)toTerm.getId() > 0)
         {
-            Assignment &fromAssignment = assignments.from[fromTerm.getId()];
-            Assignment &toAssignment = assignments.to[toTerm.getId()];
+            int64_t &fromGroupId = assignments.from[fromTerm.getId()];
+            int64_t &toGroupId = assignments.to[toTerm.getId()];
         
-            if (fromAssignment.group == NOT_ASSIGNED && toAssignment.group == NOT_ASSIGNED)
+            if (fromGroupId== NOT_ASSIGNED && toGroupId == NOT_ASSIGNED)
             {
-                int64_t newGroup = positiveGroupId++;
-                    
-                fromAssignment.group = newGroup;
-                toAssignment.group = newGroup;
+                int64_t newGroupId = (int64_t)assignments.groups.size();
+                assignments.groups.emplace_back();
+
+                fromGroupId = newGroupId;
+                toGroupId = newGroupId;
             }
-            else if (fromAssignment.group != NOT_ASSIGNED && toAssignment.group != NOT_ASSIGNED)
+            else if (fromGroupId != NOT_ASSIGNED && toGroupId != NOT_ASSIGNED)
             {
-                if (fromAssignment.group == toAssignment.group)
+                if (fromGroupId == toGroupId)
                 {
                     continue;
                 }
 
-                int64_t newGroup = positiveGroupId++;
-                int64_t newValue = (fromAssignment.value == NOT_ASSIGNED) ? toAssignment.value : fromAssignment.value;
+                int64_t fromValue = assignments.groups[fromGroupId].value;
+                int64_t toValue = assignments.groups[toGroupId].value;
+                
+                int64_t newValue = (fromValue == NOT_ASSIGNED) ? toValue : fromValue;
 
-                positiveChangeGroup(assignments.from, fromAssignment.group, newGroup, newValue);
-                positiveChangeGroup(assignments.to, toAssignment.group, newGroup, newValue);
+                if (newValue < 0) 
+                {
+                    return false;
+                }
+
+                assignments.groups[fromGroupId].value = newValue;
+                positiveChangeGroup(assignments.to, toGroupId, fromGroupId);
             }
             else
             {
-                Assignment &noGroupAssignment = (fromAssignment.group == NOT_ASSIGNED) ? fromAssignment : toAssignment;
-                Assignment &groupAssignment = (fromAssignment.group == NOT_ASSIGNED) ? toAssignment : fromAssignment;
-            
-                noGroupAssignment.group = groupAssignment.group;
-                noGroupAssignment.value = groupAssignment.value;
+                int64_t groupId = (fromGroupId == NOT_ASSIGNED) ? toGroupId : fromGroupId;
+                int64_t &noGroupId = (fromGroupId == NOT_ASSIGNED) ? fromGroupId : toGroupId;
+                VariableAssignments::Group &group = assignments.groups[groupId];
+                int64_t groupConstant = group.value;
+
+                if (fromGroupId == NOT_ASSIGNED && groupConstant < 0)
+                {
+                    return false;
+                }
+
+                noGroupId = groupId;
             }
         }
         else 
         {
-            std::vector<Assignment> &assignmentVector = ((int32_t)fromTerm.getId() > 0) ? assignments.from : assignments.to;
-            Assignment &variableAssignment = ((int32_t)fromTerm.getId() > 0) ? assignmentVector[fromTerm.getId()] : assignmentVector[toTerm.getId()];
+            int64_t variableId = ((int32_t)fromTerm.getId() > 0) ? fromTerm.getId() : toTerm.getId();
+
+            std::vector<int64_t> &assignmentVector = ((int32_t)fromTerm.getId() > 0) ? assignments.from : assignments.to;
+            int64_t &groupId = assignmentVector[variableId];
             int64_t constant = ((int32_t)fromTerm.getId() > 0) ? toConstant : fromConstant;
 
-            if (variableAssignment.group == NOT_ASSIGNED)
+            if (groupId == NOT_ASSIGNED)
             {
-                int64_t newGroup = positiveGroupId++;
-
-                variableAssignment.group = newGroup;
-                variableAssignment.value = constant;
+                int64_t newGroupId = (int64_t)assignments.groups.size();
+                assignments.groups.emplace_back(constant);
+               
+                groupId = newGroupId;
             }
             else 
             {
-                positiveAssignGroup(assignmentVector, variableAssignment.group, constant);
+                if (constant < 0)
+                {
+                    return false;
+                }
+                
+                assignments.groups[groupId].value = constant;
             }
         }   
-
-        if ((int32_t)fromTerm.getId() > 0)
-        {
-            Assignment &fromAssignment = assignments.from[fromTerm.getId()];
-            if (fromAssignment.value < 0)
-            {
-                return false;
-            }
-        }
     }
 
     return true;   
 }
 
-bool positiveCheckNullsInToBody(std::vector<unsigned> &mappingDomain,
-    const Rule &ruleTo,
-    const PositiveVariableAssignments &assignments)
+bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
+    const VariableAssignments &assignments)
 {
-    unsigned nextInDomainIndex = 0;
-    const std::vector<Literal> &toBodyLiterals = ruleTo.getBody();
-    for (unsigned bodyIndex = 0; bodyIndex < toBodyLiterals.size(); ++bodyIndex)
+    for (const Literal &literal : literals)
     {
-        if (bodyIndex == mappingDomain[nextInDomainIndex])
-        {
-            if (nextInDomainIndex < mappingDomain.size() - 1)
-            {
-                ++nextInDomainIndex;
-            }
-
-            continue;
-        }
-
-        const Literal &literal = toBodyLiterals[bodyIndex];
-
         for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
         {
             VTerm currentTerm = literal.getTermAtPos(termIndex);
         
             if ((int32_t)currentTerm.getId() > 0)
             {
-                const Assignment &assignment = assignments.to[currentTerm.getId()];
+                int64_t groupId = assignments.to[currentTerm.getId()];
+                if (groupId == NOT_ASSIGNED)
+                    continue;
 
-                if (assignment.value < 0)
+                const VariableAssignments::Group &group = assignments.groups[groupId];
+
+                if (group.value < 0)
                 {
                     return false;
                 }
@@ -225,8 +241,9 @@ bool positiveCheckNullsInToBody(std::vector<unsigned> &mappingDomain,
     }   
 }
 
-bool positiveModels(const std::vector<Literal> &left, const std::vector<Assignment> &leftAssignment,
-    const std::vector<Literal> &right, const std::vector<Assignment> &rightAssignment,
+bool positiveModels(const std::vector<Literal> &left, const std::vector<int64_t> &leftAssignment,
+    const std::vector<Literal> &right, const std::vector<int64_t> &rightAssignment,
+    const std::vector<VariableAssignments::Group> &groups, 
     std::vector<unsigned> &satisfied, bool sameRule)
 {
     bool isCompletelySatisfied = true;
@@ -252,19 +269,24 @@ bool positiveModels(const std::vector<Literal> &left, const std::vector<Assignme
                 VTerm leftTerm = leftLiteral.getTermAtPos(termIndex);
                 VTerm rightTerm = rightLiteral.getTermAtPos(termIndex);
            
-                int64_t leftConstant = positiveGetAssignedConstant(leftTerm, leftAssignment);
-                int64_t rightConstant = positiveGetAssignedConstant(rightTerm, rightAssignment);
+                int64_t leftConstant = positiveGetAssignedConstant(leftTerm, leftAssignment, groups);
+                int64_t rightConstant = positiveGetAssignedConstant(rightTerm, rightAssignment, groups);
 
                 if (leftConstant != rightConstant)
                 {
+                    if (rightConstant < 0)
+                    {
+                        continue;
+                    }
+
                     leftModelsRight = false;
                     break;
                 }
                 
                 if (leftConstant == NOT_ASSIGNED) //it follows the rightConstant == NOT_ASSIGNED
                 {
-                    int64_t leftGroup = leftAssignment[leftTerm.getId()].group;
-                    int64_t rightGroup = rightAssignment[rightTerm.getId()].group;
+                    int64_t leftGroup = leftAssignment[leftTerm.getId()];
+                    int64_t rightGroup = rightAssignment[rightTerm.getId()];
                     
                     if (leftGroup == rightGroup)
                     {
@@ -319,30 +341,42 @@ bool positiveModels(const std::vector<Literal> &left, const std::vector<Assignme
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const PositiveVariableAssignments &assignments);
+    const VariableAssignments &assignments);
 
 bool positiveCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const PositiveVariableAssignments &assignments)
+    const VariableAssignments &assignments)
 {
-    if (!positiveCheckNullsInToBody(mappingDomain, ruleTo, assignments))
+    unsigned nextInDomainIndex = 0;
+    const std::vector<Literal> toBodyLiterals = ruleTo.getBody();
+    std::vector<Literal> notMappedToBodyLiterals;
+    notMappedToBodyLiterals.reserve(toBodyLiterals.size());
+    for (unsigned bodyIndex = 0; bodyIndex < toBodyLiterals.size(); ++bodyIndex)
     {
-        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+         if (bodyIndex == mappingDomain[nextInDomainIndex])
+        {
+            if (nextInDomainIndex < mappingDomain.size() - 1)
+            {
+                ++nextInDomainIndex;
+            }
+
+            continue;
+        }
+
+        notMappedToBodyLiterals.push_back(toBodyLiterals[bodyIndex]);
     }
 
-    const std::vector<Literal> toBodyLiterals = ruleTo.getBody();
-    std::vector<Literal> mappedToBodyLiterals;
-    for (unsigned domainElement : mappingDomain)
+    if (!positiveCheckNullsInToBody(notMappedToBodyLiterals, assignments))
     {
-        mappedToBodyLiterals.push_back(toBodyLiterals[domainElement]);
+        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
     }
 
     std::vector<unsigned> satisfied;
     satisfied.resize(ruleFrom.getHeads().size());
 
     bool fromRuleSatisfied = false;
-    fromRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleFrom.getHeads(), assignments.from, satisfied, true);
-    fromRuleSatisfied |= positiveModels(mappedToBodyLiterals, assignments.to, ruleFrom.getHeads(), assignments.from, satisfied, false);
+    fromRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, true);
+    fromRuleSatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
 
     if (fromRuleSatisfied)
     {
@@ -353,16 +387,16 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     satisfied.resize(ruleTo.getHeads().size());
 
     bool toRuleSatisfied = false;
-    toRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleTo.getHeads(), assignments.to, satisfied, false);
-    toRuleSatisfied |= positiveModels(mappedToBodyLiterals, assignments.to, ruleTo.getHeads(), assignments.to, satisfied, true);
-    toRuleSatisfied |= positiveModels(ruleFrom.getHeads(), assignments.from, ruleTo.getHeads(), assignments.to, satisfied, false);
+    toRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, false);
+    toRuleSatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, true);
+    toRuleSatisfied |= positiveModels(ruleFrom.getHeads(), assignments.from, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, false);
 
     return !toRuleSatisfied;
 }
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const PositiveVariableAssignments &assignments)
+    const VariableAssignments &assignments)
 {
     unsigned bodyToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
@@ -378,7 +412,7 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
             if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId())
                 continue;
 
-            PositiveVariableAssignments extendedAssignments = assignments;
+            VariableAssignments extendedAssignments = assignments;
             if (!positiveExtendAssignment(literalFrom, literalTo, extendedAssignments))
                 continue;
 
@@ -395,16 +429,7 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
 bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo)
 {
     std::vector<unsigned> mappingDomain;
-    std::vector<Assignment> fromAssignment, toAssignment;
-
-    fromAssignment.resize(variableCountFrom);
-    toAssignment.resize(variableCountTo);
-
-    PositiveVariableAssignments assignments;
-    assignments.from = fromAssignment;
-    assignments.to = toAssignment;
-
-    positiveGroupId = 0;
+    VariableAssignments assignments(variableCountFrom, variableCountTo);
 
     return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 }
@@ -436,9 +461,6 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(Program *progra
     {
         for (unsigned ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
         {
-            if (ruleFrom == ruleTo)
-                continue;
-
             unsigned variableCountFrom = variableCounts[ruleFrom];
             unsigned variableCountTo = variableCounts[ruleTo];
             

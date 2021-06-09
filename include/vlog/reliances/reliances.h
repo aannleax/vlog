@@ -4,8 +4,9 @@
 #include "vlog/concepts.h"
 
 #include <vector>
+#include <limits>
 
-#define NOT_ASSIGNED INT_MAX
+#define NOT_ASSIGNED std::numeric_limits<int64_t>::max()
 
 struct RelianceGraph
 {

@@ -7,7 +7,7 @@
 #include <vector>
 #include <stack>
 #include <unordered_set>
-#include <queue>
+#include <stack>
 
 class SemiNaiverOrdered: public SemiNaiver {
 public:

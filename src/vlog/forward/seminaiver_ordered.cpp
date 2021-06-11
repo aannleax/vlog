@@ -45,27 +45,6 @@ void SemiNaiverOrdered::dfsUntil(const RelianceGraph &graph, unsigned node,
     }
 }
 
-/*
-    Test case:
-    
-    RelianceGraph test(9);
-    RelianceGraph testTransposed(9);
-
-    test.addEdge(0, 1); testTransposed.addEdge(1, 0);
-    test.addEdge(1, 2); testTransposed.addEdge(2, 1);
-    test.addEdge(2, 3); testTransposed.addEdge(3, 2);
-    test.addEdge(3, 0); testTransposed.addEdge(0, 3);
-    test.addEdge(2, 4); testTransposed.addEdge(4, 2);
-    test.addEdge(4, 5); testTransposed.addEdge(5, 4);
-    test.addEdge(5, 6); testTransposed.addEdge(6, 5);
-    test.addEdge(6, 4); testTransposed.addEdge(4, 6);
-    test.addEdge(7, 6); testTransposed.addEdge(6, 7);
-    test.addEdge(7, 8); testTransposed.addEdge(8, 7); 
-
-    relianceGraphs.first = test;
-    relianceGraphs.second = testTransposed;
-*/
-
 std::vector<std::vector<unsigned>> SemiNaiverOrdered::computeRelianceGroups(
     const RelianceGraph &graph, const RelianceGraph &graphTransposed)
 {
@@ -112,6 +91,7 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
     std::vector<PositiveGroup> &positiveGroups)
 {
     positiveGroups.resize(groups.size());
+    std::vector<RuleExecutionDetails> allRuleDetails;
 
     for (unsigned groupIndex = 0; groupIndex < groups.size(); ++groupIndex)
     {
@@ -137,11 +117,18 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
             }
         }
 
+        std::copy(newGroup.rules.begin(), newGroup.rules.end(), std::back_inserter(allRuleDetails));
+
         for (unsigned successor : successorSet)
         {
             newGroup.successors.push_back(&positiveGroups[0] + successor);
         }
     }
+
+    chaseMgmt = std::shared_ptr<ChaseMgmt>(new ChaseMgmt(allRuleDetails,
+        typeChase, checkCyclicTerms,
+        singleRuleToCheck,
+        predIgnoreBlock));
 }
 
 void SemiNaiverOrdered::run(size_t lastExecution,
@@ -178,11 +165,14 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     for (vector<unsigned> &group : relianceGroups)
     {
+        if (group.size() < 2)
+            continue;
+
         for (unsigned member : group)
         {
-            std::cout << member << " ";
+            std::cout << allRules[member].tostring(program, &layer) << std::endl;
         }
-        std::cout << std::endl;
+        std::cout << "------------------------" << std::endl;
     }
 
     std::cout << "Found " << relianceGroups.size() << " groups." << std::endl;
@@ -191,6 +181,49 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::vector<PositiveGroup> positiveGroups;
     prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGroups, positiveGroups);
+
+    std::stack<PositiveGroup *> positiveStack;
+
+    for (PositiveGroup &currentGroup : positiveGroups)
+    {
+        for (const RuleExecutionDetails &details : currentGroup.rules)
+        {
+            if (details.nIDBs == 0)
+            {
+                positiveStack.push(&currentGroup);
+            }
+        }
+    }
+
+    int limitView = 0;
+
+    while (!positiveStack.empty())
+    {
+        PositiveGroup *currentGroup = positiveStack.top();
+        positiveStack.pop();
+
+        currentGroup->triggered = false;
+        currentGroup->active = false;
+
+        if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
+        {
+            limitView = iteration == 0 ? 1 : iteration;
+        }
+
+        bool newDerivations = executeUntilSaturation(currentGroup->rules, costRules, limitView, true, timeout);
+
+        if (!newDerivations)
+            continue;
+
+        for (PositiveGroup *successorGroup : currentGroup->successors)
+        {
+            if (!successorGroup->triggered)
+            {
+                successorGroup->triggered = true;
+                positiveStack.push(successorGroup);
+            }
+        }
+    }
 
     this->running = false;
 }

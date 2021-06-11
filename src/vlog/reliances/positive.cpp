@@ -225,12 +225,14 @@ bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
             }
         }
     }   
+
+    return true;
 }
 
 bool positiveModels(const std::vector<Literal> &left, const std::vector<int64_t> &leftAssignment,
     const std::vector<Literal> &right, const std::vector<int64_t> &rightAssignment,
     const std::vector<VariableAssignments::Group> &groups, 
-    std::vector<unsigned> &satisfied, bool sameRule)
+    std::vector<unsigned> &satisfied, bool sameRule, bool treatExistentialAsConstant = false)
 {
     bool isCompletelySatisfied = true;
 
@@ -260,7 +262,7 @@ bool positiveModels(const std::vector<Literal> &left, const std::vector<int64_t>
 
                 if (leftConstant != rightConstant)
                 {
-                    if (rightConstant < 0)
+                    if (!treatExistentialAsConstant && rightConstant < 0)
                     {
                         continue;
                     }
@@ -360,6 +362,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     std::vector<unsigned> satisfied;
     satisfied.resize(ruleFrom.getHeads().size());
 
+    //TODO: Maybe do a quick check whether or not this can fire, for example if the head contains a predicate which is not in I_a
     bool fromRuleSatisfied = false;
     fromRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, true);
     fromRuleSatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
@@ -367,6 +370,19 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     if (fromRuleSatisfied)
     {
         return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+    }
+
+    satisfied.clear();
+    satisfied.resize(ruleTo.getBody().size());
+
+    //TODO: If phi_2 contains nulls then this check can be skipped (because there are no nulls in phi_1 and no nulls in phi_{22} -> see check in the beginning for that)
+    bool toBodySatisfied = false;
+    toBodySatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleTo.getBody(), assignments.to, assignments.groups, satisfied, false, true);
+    toBodySatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleTo.getBody(), assignments.to, assignments.groups, satisfied, true, true);
+
+    if (toBodySatisfied)
+    {
+        return false;
     }
 
     satisfied.clear();

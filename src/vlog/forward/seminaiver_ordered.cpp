@@ -45,11 +45,12 @@ void SemiNaiverOrdered::dfsUntil(const RelianceGraph &graph, unsigned node,
     }
 }
 
-std::vector<std::vector<unsigned>> SemiNaiverOrdered::computeRelianceGroups(
+SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
     const RelianceGraph &graph, const RelianceGraph &graphTransposed)
 {
-    std::vector<std::vector<unsigned>> result;
-    
+    RelianceGroupResult result;
+    result.assignments.resize(graph.edges.size(), 0);
+
     if (graph.edges.size() == 0)
         return result;
 
@@ -77,7 +78,14 @@ std::vector<std::vector<unsigned>> SemiNaiverOrdered::computeRelianceGroups(
 
             if (currentGroup.size() > 0)
             {
-                result.push_back(currentGroup);
+                unsigned currentGroupIndex = result.groups.size();
+                result.groups.push_back(currentGroup);
+
+                for (unsigned member : currentGroup)
+                {
+                    result.assignments[member] = currentGroupIndex;
+                }
+
                 currentGroup.clear();
             }
         }
@@ -87,25 +95,27 @@ std::vector<std::vector<unsigned>> SemiNaiverOrdered::computeRelianceGroups(
 }
 
 void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
-    const RelianceGraph &positiveGraph, const std::vector<std::vector<unsigned>> &groups,
+    const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed,
+    const RelianceGroupResult &groupsResult, 
     std::vector<PositiveGroup> &positiveGroups)
 {
-    positiveGroups.resize(groups.size());
+    positiveGroups.resize(groupsResult.groups.size());
     std::vector<RuleExecutionDetails> allRuleDetails;
 
-    for (unsigned groupIndex = 0; groupIndex < groups.size(); ++groupIndex)
+    for (unsigned groupIndex = 0; groupIndex < groupsResult.groups.size(); ++groupIndex)
     {
-        const std::vector<unsigned> &group = groups[groupIndex];
+        const std::vector<unsigned> &group = groupsResult.groups[groupIndex];
         PositiveGroup &newGroup = positiveGroups[groupIndex];
 
         newGroup.rules.reserve(group.size());
 
         std::unordered_set<unsigned> successorSet;
+        std::unordered_set<unsigned> predecessorSet;
 
         for (unsigned ruleIndex : group)
         {
             const Rule &currentRule = allRules[ruleIndex];
-            newGroup.rules.emplace_back(currentRule, currentRule.getId());
+            newGroup.rules.emplace_back(currentRule, currentRule.getId()); //TODO: Check this Id field
 
             newGroup.rules.back().createExecutionPlans(checkCyclicTerms);
             newGroup.rules.back().calculateNVarsInHeadFromEDB();
@@ -113,7 +123,12 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         
             for (unsigned successor : positiveGraph.edges[ruleIndex])
             {
-                successorSet.insert(successor);
+                successorSet.insert(groupsResult.assignments[successor]);
+            }
+
+            for (unsigned predecessor : positiveGraphTransposed.edges[ruleIndex])
+            {
+                predecessorSet.insert(groupsResult.assignments[predecessor]);
             }
         }
 
@@ -123,6 +138,11 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         {
             newGroup.successors.push_back(&positiveGroups[0] + successor);
         }
+
+        for (unsigned predecessor : predecessorSet)
+        {
+            newGroup.predecessors.push_back(&positiveGroups[0] + predecessor);
+        }
     }
 
     chaseMgmt = std::shared_ptr<ChaseMgmt>(new ChaseMgmt(allRuleDetails,
@@ -130,6 +150,8 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         singleRuleToCheck,
         predIgnoreBlock));
 }
+
+#define RUNMAT 0
 
 void SemiNaiverOrdered::run(size_t lastExecution,
     size_t iteration,
@@ -147,6 +169,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     listDerivations.clear();
 
     std::vector<Rule> &allRules = program->getAllRules();
+    std::cout << "#Rules: " << allRules.size() << std::endl;
 
     std::cout << "Computing positive reliances..." << std::endl;
     std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(allRules);
@@ -161,9 +184,9 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     }
 
     std::cout << "Computing positive reliance groups..." << std::endl;
-    std::vector<std::vector<unsigned>> relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);
+    RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);
 
-    for (vector<unsigned> &group : relianceGroups)
+    for (vector<unsigned> &group : relianceGroups.groups)
     {
         if (group.size() < 2)
             continue;
@@ -175,14 +198,15 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         std::cout << "------------------------" << std::endl;
     }
 
-    std::cout << "Found " << relianceGroups.size() << " groups." << std::endl;
+    std::cout << "Found " << relianceGroups.groups.size() << " groups." << std::endl;
 
     std::vector<StatIteration> costRules;
 
+#if RUNMAT
     std::vector<PositiveGroup> positiveGroups;
     prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGroups, positiveGroups);
 
-    std::stack<PositiveGroup *> positiveStack;
+    std::deque<PositiveGroup *> positiveStack;
 
     for (PositiveGroup &currentGroup : positiveGroups)
     {
@@ -190,7 +214,9 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         {
             if (details.nIDBs == 0)
             {
-                positiveStack.push(&currentGroup);
+                positiveStack.push_front(&currentGroup);
+                currentGroup.inQueue = true;
+                currentGroup.triggered = true;
             }
         }
     }
@@ -199,31 +225,52 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     while (!positiveStack.empty())
     {
-        PositiveGroup *currentGroup = positiveStack.top();
-        positiveStack.pop();
+        PositiveGroup *currentGroup = positiveStack.front();
+        positiveStack.pop_front();
 
-        currentGroup->triggered = false;
-        currentGroup->active = false;
-
-        if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
+        bool hasActivePredecessors = false;
+        for (PositiveGroup *predecessorGroup : currentGroup->predecessors)
         {
-            limitView = iteration == 0 ? 1 : iteration;
+            if (predecessorGroup->active)
+            {
+                hasActivePredecessors = true;
+                break;
+            }
         }
 
-        bool newDerivations = executeUntilSaturation(currentGroup->rules, costRules, limitView, true, timeout);
-
-        if (!newDerivations)
-            continue;
-
-        for (PositiveGroup *successorGroup : currentGroup->successors)
+        if (hasActivePredecessors)
         {
-            if (!successorGroup->triggered)
+            currentGroup->inQueue = false;
+            currentGroup->active = false;
+
+            if (currentGroup->triggered)
             {
-                successorGroup->triggered = true;
-                positiveStack.push(successorGroup);
+                if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
+                {
+                    limitView = iteration == 0 ? 1 : iteration;
+                }
+
+                bool newDerivations = executeUntilSaturation(currentGroup->rules, costRules, limitView, true, timeout);
+
+                if (newDerivations)
+                {
+                    for (PositiveGroup *successorGroup : currentGroup->successors)
+                    {
+                        successorGroup->triggered = true;
+                    }
+                }
+            }
+
+            for (PositiveGroup *successorGroup : currentGroup->successors)
+            {
+                if (!successorGroup->inQueue)
+                {
+                    positiveStack.push_front(successorGroup);
+                }
             }
         }
     }
+#endif
 
     this->running = false;
 }

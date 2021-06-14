@@ -7,7 +7,7 @@
 #include <vector>
 #include <stack>
 #include <unordered_set>
-#include <stack>
+#include <deque>
 
 class SemiNaiverOrdered: public SemiNaiver {
 public:
@@ -15,9 +15,17 @@ public:
     {
         std::vector<RuleExecutionDetails> rules;
         std::vector<PositiveGroup *> successors;
+        std::vector<PositiveGroup *> predecessors;
 
         bool active = true; //can potentially be executed
-        bool triggered = true; //already in queue
+        bool inQueue = false; //already in queue
+        bool triggered = false; //contains rules which may produce new facts
+    };
+
+    struct RelianceGroupResult
+    {
+        std::vector<std::vector<unsigned>> groups;
+        std::vector<unsigned> assignments;
     };
 
     VLIBEXP SemiNaiverOrdered(EDBLayer &layer,
@@ -41,9 +49,9 @@ public:
 private:
     void fillOrder(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
     void dfsUntil(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
-    std::vector<std::vector<unsigned>> computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
+    RelianceGroupResult computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
 
-    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const std::vector<std::vector<unsigned>> &groups, std::vector<PositiveGroup> &positiveGroups);
+    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
 };
 
 #endif

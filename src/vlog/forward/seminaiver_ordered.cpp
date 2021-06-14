@@ -151,7 +151,12 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         predIgnoreBlock));
 }
 
-#define RUNMAT 0
+SemiNaiverOrdered::ExecuteResult execute()
+{
+    return SemiNaiverOrdered::ExecuteResult::Done;
+}
+
+#define RUNMAT 1
 
 void SemiNaiverOrdered::run(size_t lastExecution,
     size_t iteration,
@@ -223,6 +228,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     int limitView = 0;
 
+    PositiveGroup *firstBlockedGroup = nullptr;
     while (!positiveStack.empty())
     {
         PositiveGroup *currentGroup = positiveStack.front();
@@ -240,32 +246,64 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
         if (hasActivePredecessors)
         {
-            currentGroup->inQueue = false;
-            currentGroup->active = false;
+            ExecuteResult executeResult = ExecuteResult::Nothing;
 
             if (currentGroup->triggered)
             {
+                bool isBlocked = false;
+                for (PositiveGroup *blockingGroup : currentGroup->blockers)
+                {
+                    if (blockingGroup.active)
+                    {
+                        isBlocked = true;
+                        break;
+                    }
+                }
+
                 if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
                 {
                     limitView = iteration == 0 ? 1 : iteration;
                 }
 
-                bool newDerivations = executeUntilSaturation(currentGroup->rules, costRules, limitView, true, timeout);
-
-                if (newDerivations)
+                if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
-                    for (PositiveGroup *successorGroup : currentGroup->successors)
-                    {
-                        successorGroup->triggered = true;
-                    }
+                    executeResult = execute();
+                    //bool newDerivations = executeUntilSaturation(currentGroup->rules, costRules, limitView, true, timeout);
+                }
+
+                if (isBlocked && firstBlockedGroup == nullptr)
+                {
+                    firstBlockedGroup = currentGroup;
+                }
+                else if (currentGroup == firstBlockedGroup)
+                {
+                    firstBlockedGroup = nullptr;
                 }
             }
 
-            for (PositiveGroup *successorGroup : currentGroup->successors)
+            if (executeResult & ExecuteResult::Done)
             {
-                if (!successorGroup->inQueue)
+                currentGroup->inQueue = false;
+                currentGroup->active = false;
+            }
+            else
+            {
+                positiveStack->push_back(currentGroup);
+            }
+
+            if (executeResult != ExecuteResult::Nothing)
+            {
+                for (PositiveGroup *successorGroup : currentGroup->successors)
                 {
-                    positiveStack.push_front(successorGroup);
+                    if (executeResult & ExecuteResult::New)
+                    {
+                        successorGroup->triggered = true;
+                    }
+
+                    if (!successorGroup->inQueue)
+                    {
+                        positiveStack.push_front(successorGroup);   
+                    }
                 }
             }
         }

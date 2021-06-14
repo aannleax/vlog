@@ -17,6 +17,8 @@ public:
         std::vector<PositiveGroup *> successors;
         std::vector<PositiveGroup *> predecessors;
 
+        std::vector<PositiveGroup *> blockers;
+
         bool active = true; //can potentially be executed
         bool inQueue = false; //already in queue
         bool triggered = false; //contains rules which may produce new facts
@@ -26,6 +28,13 @@ public:
     {
         std::vector<std::vector<unsigned>> groups;
         std::vector<unsigned> assignments;
+    };
+
+    enum class ExecuteResult : unsigned
+    {
+        Nothing = 0;
+        Done = 1 << 0;
+        New = 1 << 1;
     };
 
     VLIBEXP SemiNaiverOrdered(EDBLayer &layer,

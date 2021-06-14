@@ -341,7 +341,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     notMappedToBodyLiterals.reserve(toBodyLiterals.size());
     for (unsigned bodyIndex = 0; bodyIndex < toBodyLiterals.size(); ++bodyIndex)
     {
-         if (bodyIndex == mappingDomain[nextInDomainIndex])
+        if (bodyIndex == mappingDomain[nextInDomainIndex])
         {
             if (nextInDomainIndex < mappingDomain.size() - 1)
             {
@@ -462,6 +462,9 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
     {
         for (unsigned ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
         {
+            if (ruleFrom == ruleTo)
+                continue;
+
             unsigned variableCountFrom = variableCounts[ruleFrom];
             unsigned variableCountTo = variableCounts[ruleTo];
             

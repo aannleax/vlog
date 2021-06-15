@@ -30,13 +30,6 @@ public:
         std::vector<unsigned> assignments;
     };
 
-    enum class ExecuteResult : unsigned
-    {
-        Nothing = 0;
-        Done = 1 << 0;
-        New = 1 << 1;
-    };
-
     VLIBEXP SemiNaiverOrdered(EDBLayer &layer,
         Program *program, 
         bool opt_intersect,
@@ -61,6 +54,7 @@ private:
     RelianceGroupResult computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
 
     void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
+    bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, size_t limitView, bool fixpoint, unsigned long *timeout);
 };
 
 #endif

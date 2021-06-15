@@ -151,9 +151,114 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         predIgnoreBlock));
 }
 
-SemiNaiverOrdered::ExecuteResult execute()
+bool SemiNaiverOrdered::executeGroup(
+    std::vector<RuleExecutionDetails> &ruleset,
+    std::vector<StatIteration> &costRules,
+    size_t limitView, bool fixpoint, unsigned long *timeout
+)
 {
-    return SemiNaiverOrdered::ExecuteResult::Done;
+    bool result = false;
+
+    size_t currentRule = 0;
+    uint32_t rulesWithoutDerivation = 0; 
+
+    size_t nRulesOnePass = 0;
+    size_t lastIteration = 0;
+
+    std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
+    do 
+    {
+        std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
+        bool response = executeRule(ruleset[currentRule], iteration, limitView, NULL);
+
+        result |= response;
+
+        if (timeout != NULL && *timeout != 0) 
+        {
+            std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
+            if (runDuration.count() > *timeout) {
+                *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                return result;
+            }
+        }
+
+        std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
+        StatIteration stat;
+        stat.iteration = iteration;
+        stat.rule = &ruleset[currentRule].rule;
+        stat.time = iterationDuration.count() * 1000;
+        stat.derived = response;
+        costRules.push_back(stat);
+
+        if (limitView > 0) 
+        {
+            // Don't use iteration here, because lastExecution determines which data we'll look at during the next round,
+            // and limitView determines which data we are considering now. There should not be a gap.
+            ruleset[currentRule].lastExecution = limitView;
+            LOG(DEBUGL) << "Setting lastExecution of this rule to " << limitView;
+        } 
+        else 
+        {
+            ruleset[currentRule].lastExecution = iteration;
+        }
+        iteration++;
+
+        if (checkCyclicTerms) {
+            foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
+            if (foundCyclicTerms) {
+                LOG(DEBUGL) << "Found a cyclic term";
+                return result;
+            }
+        }
+
+        if (response)
+        {
+            rulesWithoutDerivation = 0;
+            nRulesOnePass++;
+        }
+        else
+        {
+            rulesWithoutDerivation++;
+        }
+
+        currentRule = (currentRule + 1) % ruleset.size();
+
+        if (currentRule == 0) 
+        {
+            if (!fixpoint)
+                break;
+#ifdef DEBUG
+            std::chrono::duration<double> sec = std::chrono::system_clock::now() - executionStart;
+            LOG(DEBUGL) << "--Time round " << sec.count() * 1000 << " " << iteration;
+            round_start = std::chrono::system_clock::now();
+            //CODE FOR Statistics
+            LOG(INFOL) << "Finish pass over the rules. Step=" << iteration << ". IDB RulesWithDerivation=" <<
+                nRulesOnePass << " out of " << ruleset.size() << " Derivations so far " << countAllIDBs();
+            printCountAllIDBs("After step " + to_string(iteration) + ": ");
+            nRulesOnePass = 0;
+
+            //Get the top 10 rules in the last iteration
+            std::sort(costRules.begin(), costRules.end());
+            std::string out = "";
+            int n = 0;
+            for (const auto &exec : costRules) {
+                if (exec.iteration >= lastIteration) {
+                    if (n < 10 || exec.derived) {
+                        out += "Iteration " + to_string(exec.iteration) + " runtime " + to_string(exec.time);
+                        out += " " + exec.rule->tostring(program, &layer) + " response " + to_string(exec.derived);
+                        out += "\n";
+                    }
+                    n++;
+                }
+            }
+            LOG(DEBUGL) << "Rules with the highest cost\n\n" << out;
+            lastIteration = iteration;
+            //END CODE STATISTICS
+#endif
+        }
+    } while (rulesWithoutDerivation != ruleset.size());
+
+    return result;
 }
 
 #define RUNMAT 1
@@ -209,7 +314,13 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
 #if RUNMAT
     std::vector<PositiveGroup> positiveGroups;
-    prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGroups, positiveGroups);
+    /*
+       (size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
+    const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed,
+    const RelianceGroupResult &groupsResult, 
+    std::vector<PositiveGroup> &positiveGroups) 
+    */
+    prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGraphs.second, relianceGroups, positiveGroups);
 
     std::deque<PositiveGroup *> positiveStack;
 
@@ -246,14 +357,14 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
         if (hasActivePredecessors)
         {
-            ExecuteResult executeResult = ExecuteResult::Nothing;
-
+            bool newDerivations = false;
+            bool isBlocked = false;
+            
             if (currentGroup->triggered)
             {
-                bool isBlocked = false;
                 for (PositiveGroup *blockingGroup : currentGroup->blockers)
                 {
-                    if (blockingGroup.active)
+                    if (blockingGroup->active)
                     {
                         isBlocked = true;
                         break;
@@ -267,8 +378,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
                 if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
-                    executeResult = execute();
-                    //bool newDerivations = executeUntilSaturation(currentGroup->rules, costRules, limitView, true, timeout);
+                    newDerivations = executeGroup(currentGroup->rules, costRules, limitView, !isBlocked, timeout);
                 }
 
                 if (isBlocked && firstBlockedGroup == nullptr)
@@ -281,21 +391,21 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                 }
             }
 
-            if (executeResult & ExecuteResult::Done)
+            if (!isBlocked)
             {
                 currentGroup->inQueue = false;
                 currentGroup->active = false;
             }
             else
             {
-                positiveStack->push_back(currentGroup);
+                positiveStack.push_back(currentGroup);
             }
 
-            if (executeResult != ExecuteResult::Nothing)
+            if (newDerivations || !isBlocked)
             {
                 for (PositiveGroup *successorGroup : currentGroup->successors)
                 {
-                    if (executeResult & ExecuteResult::New)
+                    if (newDerivations)
                     {
                         successorGroup->triggered = true;
                     }

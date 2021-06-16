@@ -123,12 +123,20 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         
             for (unsigned successor : positiveGraph.edges[ruleIndex])
             {
-                successorSet.insert(groupsResult.assignments[successor]);
+                unsigned successorGroup = groupsResult.assignments[successor];
+                if (successorGroup == groupIndex)
+                    continue;
+
+                successorSet.insert(successorGroup);
             }
 
             for (unsigned predecessor : positiveGraphTransposed.edges[ruleIndex])
             {
-                predecessorSet.insert(groupsResult.assignments[predecessor]);
+                unsigned predecessorGroup = groupsResult.assignments[predecessor];
+                if (predecessorGroup == groupIndex)
+                    continue;
+
+                predecessorSet.insert(predecessorGroup);
             }
         }
 
@@ -154,114 +162,136 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
 bool SemiNaiverOrdered::executeGroup(
     std::vector<RuleExecutionDetails> &ruleset,
     std::vector<StatIteration> &costRules,
-    size_t limitView, bool fixpoint, unsigned long *timeout
+    bool blocked, unsigned long *timeout
 )
 {
     bool result = false;
-
-    size_t currentRule = 0;
-    uint32_t rulesWithoutDerivation = 0; 
-
-    size_t nRulesOnePass = 0;
-    size_t lastIteration = 0;
-
-    std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
-    do 
+    bool newDerivations = true;
+    while (newDerivations)
     {
-        std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
-        bool response = executeRule(ruleset[currentRule], iteration, limitView, NULL);
+        newDerivations = false;
+        int limitView = 0;
 
-        result |= response;
+        size_t currentRule = 0;
+        uint32_t rulesWithoutDerivation = 0; 
 
-        if (timeout != NULL && *timeout != 0) 
+        size_t nRulesOnePass = 0;
+        size_t lastIteration = 0;
+
+        if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
         {
-            std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
-            if (runDuration.count() > *timeout) {
-                *timeout = 0;   // To indicate materialization was stopped because of timeout.
-                return result;
-            }
+            limitView = this->iteration == 0 ? 1 : this->iteration;
         }
 
-        std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
-        StatIteration stat;
-        stat.iteration = iteration;
-        stat.rule = &ruleset[currentRule].rule;
-        stat.time = iterationDuration.count() * 1000;
-        stat.derived = response;
-        costRules.push_back(stat);
-
-        if (limitView > 0) 
+        std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
+        do 
         {
-            // Don't use iteration here, because lastExecution determines which data we'll look at during the next round,
-            // and limitView determines which data we are considering now. There should not be a gap.
-            ruleset[currentRule].lastExecution = limitView;
-            LOG(DEBUGL) << "Setting lastExecution of this rule to " << limitView;
-        } 
-        else 
-        {
-            ruleset[currentRule].lastExecution = iteration;
-        }
-        iteration++;
+            std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
+            bool response = executeRule(ruleset[currentRule], iteration, limitView, NULL);
 
-        if (checkCyclicTerms) {
-            foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
-            if (foundCyclicTerms) {
-                LOG(DEBUGL) << "Found a cyclic term";
-                return result;
-            }
-        }
+            result |= response;
+            newDerivations |= response;
 
-        if (response)
-        {
-            rulesWithoutDerivation = 0;
-            nRulesOnePass++;
-        }
-        else
-        {
-            rulesWithoutDerivation++;
-        }
-
-        currentRule = (currentRule + 1) % ruleset.size();
-
-        if (currentRule == 0) 
-        {
-            if (!fixpoint)
-                break;
-#ifdef DEBUG
-            std::chrono::duration<double> sec = std::chrono::system_clock::now() - executionStart;
-            LOG(DEBUGL) << "--Time round " << sec.count() * 1000 << " " << iteration;
-            round_start = std::chrono::system_clock::now();
-            //CODE FOR Statistics
-            LOG(INFOL) << "Finish pass over the rules. Step=" << iteration << ". IDB RulesWithDerivation=" <<
-                nRulesOnePass << " out of " << ruleset.size() << " Derivations so far " << countAllIDBs();
-            printCountAllIDBs("After step " + to_string(iteration) + ": ");
-            nRulesOnePass = 0;
-
-            //Get the top 10 rules in the last iteration
-            std::sort(costRules.begin(), costRules.end());
-            std::string out = "";
-            int n = 0;
-            for (const auto &exec : costRules) {
-                if (exec.iteration >= lastIteration) {
-                    if (n < 10 || exec.derived) {
-                        out += "Iteration " + to_string(exec.iteration) + " runtime " + to_string(exec.time);
-                        out += " " + exec.rule->tostring(program, &layer) + " response " + to_string(exec.derived);
-                        out += "\n";
-                    }
-                    n++;
+            if (timeout != NULL && *timeout != 0) 
+            {
+                std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
+                if (runDuration.count() > *timeout) {
+                    *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                    return result;
                 }
             }
-            LOG(DEBUGL) << "Rules with the highest cost\n\n" << out;
-            lastIteration = iteration;
-            //END CODE STATISTICS
+
+            std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
+            StatIteration stat;
+            stat.iteration = iteration;
+            stat.rule = &ruleset[currentRule].rule;
+            stat.time = iterationDuration.count() * 1000;
+            stat.derived = response;
+            costRules.push_back(stat);
+
+            if (limitView > 0) 
+            {
+                // Don't use iteration here, because lastExecution determines which data we'll look at during the next round,
+                // and limitView determines which data we are considering now. There should not be a gap.
+                ruleset[currentRule].lastExecution = limitView;
+                LOG(DEBUGL) << "Setting lastExecution of this rule to " << limitView;
+            } 
+            else 
+            {
+                ruleset[currentRule].lastExecution = iteration;
+            }
+            iteration++;
+
+            if (checkCyclicTerms) {
+                foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
+                if (foundCyclicTerms) {
+                    LOG(DEBUGL) << "Found a cyclic term";
+                    return result;
+                }
+            }
+
+            if (response)
+            {
+                rulesWithoutDerivation = 0;
+                nRulesOnePass++;
+            }
+            else
+            {
+                rulesWithoutDerivation++;
+            }
+
+            currentRule = (currentRule + 1) % ruleset.size();
+
+            if (currentRule == 0) 
+            {
+                if (!blocked)
+                    return result;
+#ifdef DEBUG
+                std::chrono::duration<double> sec = std::chrono::system_clock::now() - executionStart;
+                LOG(DEBUGL) << "--Time round " << sec.count() * 1000 << " " << iteration;
+                round_start = std::chrono::system_clock::now();
+                //CODE FOR Statistics
+                LOG(INFOL) << "Finish pass over the rules. Step=" << iteration << ". IDB RulesWithDerivation=" <<
+                    nRulesOnePass << " out of " << ruleset.size() << " Derivations so far " << countAllIDBs();
+                printCountAllIDBs("After step " + to_string(iteration) + ": ");
+                nRulesOnePass = 0;
+
+                //Get the top 10 rules in the last iteration
+                std::sort(costRules.begin(), costRules.end());
+                std::string out = "";
+                int n = 0;
+                for (const auto &exec : costRules) {
+                    if (exec.iteration >= lastIteration) {
+                        if (n < 10 || exec.derived) {
+                            out += "Iteration " + to_string(exec.iteration) + " runtime " + to_string(exec.time);
+                            out += " " + exec.rule->tostring(program, &layer) + " response " + to_string(exec.derived);
+                            out += "\n";
+                        }
+                        n++;
+                    }
+                }
+                LOG(DEBUGL) << "Rules with the highest cost\n\n" << out;
+                lastIteration = iteration;
+                //END CODE STATISTICS
 #endif
-        }
-    } while (rulesWithoutDerivation != ruleset.size());
+            }
+        } while (rulesWithoutDerivation != ruleset.size());
+    }
 
     return result;
 }
 
 #define RUNMAT 1
+
+void SemiNaiverOrdered::setActive(PositiveGroup *currentGroup)
+{
+    currentGroup->active = true;
+
+    for (PositiveGroup *successorGroup : currentGroup->successors)
+    {
+        setActive(successorGroup);
+    }
+}
 
 void SemiNaiverOrdered::run(size_t lastExecution,
     size_t iteration,
@@ -274,9 +304,10 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     this->foundCyclicTerms = false;
     this->predIgnoreBlock = predIgnoreBlock;
     this->running = true;
-    this->iteration = iteration;
     this->startTime = std::chrono::system_clock::now();
     listDerivations.clear();
+
+    this->iteration = iteration;
 
     std::vector<Rule> &allRules = program->getAllRules();
     std::cout << "#Rules: " << allRules.size() << std::endl;
@@ -284,19 +315,19 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     std::cout << "Computing positive reliances..." << std::endl;
     std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(allRules);
 
-    std::cout << "Positive reliances: " << std::endl;
+    /*std::cout << "Positive reliances: " << std::endl;
     for (unsigned from = 0; from < relianceGraphs.first.edges.size(); ++from)
     {
         for (unsigned to :  relianceGraphs.first.edges[from])
         {
             std::cout << "positive reliance: " << from << " -> " << to << std::endl;
         }
-    }
+    }*/
 
     std::cout << "Computing positive reliance groups..." << std::endl;
     RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);
 
-    for (vector<unsigned> &group : relianceGroups.groups)
+    /*for (vector<unsigned> &group : relianceGroups.groups)
     {
         if (group.size() < 2)
             continue;
@@ -308,18 +339,12 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         std::cout << "------------------------" << std::endl;
     }
 
-    std::cout << "Found " << relianceGroups.groups.size() << " groups." << std::endl;
+    std::cout << "Found " << relianceGroups.groups.size() << " groups." << std::endl;*/
 
     std::vector<StatIteration> costRules;
 
 #if RUNMAT
     std::vector<PositiveGroup> positiveGroups;
-    /*
-       (size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
-    const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed,
-    const RelianceGroupResult &groupsResult, 
-    std::vector<PositiveGroup> &positiveGroups) 
-    */
     prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGraphs.second, relianceGroups, positiveGroups);
 
     std::deque<PositiveGroup *> positiveStack;
@@ -333,17 +358,18 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                 positiveStack.push_front(&currentGroup);
                 currentGroup.inQueue = true;
                 currentGroup.triggered = true;
+
+                setActive(&currentGroup);
             }
         }
     }
-
-    int limitView = 0;
 
     PositiveGroup *firstBlockedGroup = nullptr;
     while (!positiveStack.empty())
     {
         PositiveGroup *currentGroup = positiveStack.front();
         positiveStack.pop_front();
+        currentGroup->inQueue = false;
 
         bool hasActivePredecessors = false;
         for (PositiveGroup *predecessorGroup : currentGroup->predecessors)
@@ -355,7 +381,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
             }
         }
 
-        if (hasActivePredecessors)
+        if (!hasActivePredecessors)
         {
             bool newDerivations = false;
             bool isBlocked = false;
@@ -371,14 +397,9 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                     }
                 }
 
-                if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
-                {
-                    limitView = iteration == 0 ? 1 : iteration;
-                }
-
                 if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
-                    newDerivations = executeGroup(currentGroup->rules, costRules, limitView, !isBlocked, timeout);
+                    newDerivations = executeGroup(currentGroup->rules, costRules, !isBlocked, timeout);
                 }
 
                 if (isBlocked && firstBlockedGroup == nullptr)
@@ -393,12 +414,12 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
             if (!isBlocked)
             {
-                currentGroup->inQueue = false;
                 currentGroup->active = false;
             }
             else
             {
                 positiveStack.push_back(currentGroup);
+                currentGroup->inQueue = true;
             }
 
             if (newDerivations || !isBlocked)
@@ -413,6 +434,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                     if (!successorGroup->inQueue)
                     {
                         positiveStack.push_front(successorGroup);   
+                        successorGroup->inQueue = true;
                     }
                 }
             }

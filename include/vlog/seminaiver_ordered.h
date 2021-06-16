@@ -19,7 +19,7 @@ public:
 
         std::vector<PositiveGroup *> blockers;
 
-        bool active = true; //can potentially be executed
+        bool active = false; //can potentially be executed
         bool inQueue = false; //already in queue
         bool triggered = false; //contains rules which may produce new facts
     };
@@ -52,9 +52,10 @@ private:
     void fillOrder(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
     void dfsUntil(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
     RelianceGroupResult computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
+    void setActive(PositiveGroup *currentGroup);
 
     void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
-    bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, size_t limitView, bool fixpoint, unsigned long *timeout);
+    bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool fixpoint, unsigned long *timeout);
 };
 
 #endif

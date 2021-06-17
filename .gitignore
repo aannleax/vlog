@@ -26,4 +26,5 @@ testOutput
 
 CTime.txt
 !Build.bat
+!Build-withDLL.bat
 output/*

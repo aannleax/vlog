@@ -52,15 +52,14 @@ IF "%~1" == "release" (
   set CurlDll="libcurl-d.dll"
 )
 
-set CompilerFlags=-nologo -MP -Zi -EHsc -w -std:c11 -MD%VersionSuffix% %Optimization%
+set CompilerFlags=-nologo -bigobj -MP -Zi -EHsc -w -std:c11 -MD%VersionSuffix% %Optimization%
 set LinkerFlags=
 set Libraries=%ZLibPath%\lib\zlib%VersionSuffix%.lib %Lz4Path%\lib\lz4%VersionSuffix%.lib %CurlPath%\lib\libcurl%VersionSuffix%.lib %KognacPath%\win64\x64\%Version%\kognac-core.lib %TridentPath%\win64\x64\%Version%\trident-core.lib %TridentPath%\win64\x64\%Version%\trident-sparql.lib
 set Includes=-I..\include -I%SparsehashPath%\src -I%ZLibPath%\include -I%Lz4Path%\include -I%CurlPath%\include -I%KognacPath%\include -I%TridentPath%\include -I%TridentPath%\rdf3x\include
-set CoreDefines=-DVLOG_SHARED_LIB -DWIN32  -DNDEBUG -DVLOGCORE_EXPORTS -D_WINDOWS -D_USRDLL -D_WINDLL -D_MBCS
 set Defines=-DWIN32 -DNDEBUG -D_CONSOLE -D_MBCS -DBUILDEXE
 
 pushd build
-  cl /bigobj %Defines% %Includes% %CompilerFlags% %Main% %Core% -Fe:%Name%.exe /link %LinkerFlags% %Libraries%
+  cl %Defines% %Includes% %CompilerFlags% %Main% %Core% -Fe:%Name%.exe /link %LinkerFlags% %Libraries%
 
   @copy %KognacPath%\win64\x64\%Version%\kognac-core.dll ..\build\kognac-core.dll
   @copy %TridentPath%\win64\x64\%Version%\trident-core.dll ..\build\trident-core.dll

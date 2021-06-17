@@ -3,7 +3,7 @@
 
 #include <trident/kb/consts.h>
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(BUILDEXE)
 #if VLOG_SHARED_LIB
 #define VLIBEXP DDLEXPORT
 #else

@@ -14,14 +14,18 @@ set SparsehashPath=..\..\Libraries\sparsehash
 set KognacPath=..\..\kognac
 set TridentPath=..\..\trident
 
-IF NOT EXIST build (
-  mkdir build
+IF NOT EXIST build-exe (
+  mkdir build-exe
+) 
+
+IF NOT EXIST build-core (
+  mkdir build-core
 ) 
 
 IF "%~1" == "clean" (
   echo Cleaning up...
 
-  pushd build
+  pushd build-exe
     @del /q *.exe 2>NUL
     @del /q *.dll 2>NUL
     @del /q *.lib 2>NUL
@@ -30,7 +34,11 @@ IF "%~1" == "clean" (
     @del /q *.exp 2>NUL
     @del /q *.obj 2>NUL
   popd
-  
+
+  pushd build-core
+    @del /q * 2>NUL
+  popd
+
   echo Build folder clean
 
   goto end
@@ -57,17 +65,22 @@ set LinkerFlags=
 set Libraries=%ZLibPath%\lib\zlib%VersionSuffix%.lib %Lz4Path%\lib\lz4%VersionSuffix%.lib %CurlPath%\lib\libcurl%VersionSuffix%.lib %KognacPath%\win64\x64\%Version%\kognac-core.lib %TridentPath%\win64\x64\%Version%\trident-core.lib %TridentPath%\win64\x64\%Version%\trident-sparql.lib
 set Includes=-I..\include -I%SparsehashPath%\src -I%ZLibPath%\include -I%Lz4Path%\include -I%CurlPath%\include -I%KognacPath%\include -I%TridentPath%\include -I%TridentPath%\rdf3x\include
 set CoreDefines=-DVLOG_SHARED_LIB -DWIN32  -DNDEBUG -DVLOGCORE_EXPORTS -D_WINDOWS -D_USRDLL -D_WINDLL -D_MBCS
-set Defines=-DWIN32 -DNDEBUG -D_CONSOLE -D_MBCS -DBUILDEXE
+set Defines=-DWIN32 -DNDEBUG -D_CONSOLE -D_MBCS 
 
-pushd build
-  cl /bigobj %Defines% %Includes% %CompilerFlags% %Main% %Core% -Fe:%Name%.exe /link %LinkerFlags% %Libraries%
+pushd build-core
+  cl /bigobj /LD %CoreDefines% %Includes% %CompilerFlags% %Core% -Fe:%Name%-core.dll /link %LinkerFlags% %Libraries%
 
-  @copy %KognacPath%\win64\x64\%Version%\kognac-core.dll ..\build\kognac-core.dll
-  @copy %TridentPath%\win64\x64\%Version%\trident-core.dll ..\build\trident-core.dll
-  @copy %TridentPath%\win64\x64\%Version%\trident-sparql.dll ..\build\trident-sparql.dll
-  @copy %ZLibPath%\bin\zlib%VersionSuffix%1.dll ..\build\zlib%VersionSuffix%1.dll
-  @copy %Lz4Path%\bin\lz4%VersionSuffix%.dll ..\build\lz4%VersionSuffix%.dll
-  @copy %CurlPath%\bin\%CurlDll% ..\build\%CurlDll%
+  @copy %KognacPath%\win64\x64\%Version%\kognac-core.dll ..\build-exe\kognac-core.dll
+  @copy %TridentPath%\win64\x64\%Version%\trident-core.dll ..\build-exe\trident-core.dll
+  @copy %TridentPath%\win64\x64\%Version%\trident-sparql.dll ..\build-exe\trident-sparql.dll
+  @copy %ZLibPath%\bin\zlib%VersionSuffix%1.dll ..\build-exe\zlib%VersionSuffix%1.dll
+  @copy %Lz4Path%\bin\lz4%VersionSuffix%.dll ..\build-exe\lz4%VersionSuffix%.dll
+  @copy %CurlPath%\bin\%CurlDll% ..\build-exe\%CurlDll%
+  @copy %Name%-core.dll ..\build-exe\%Name%-core.dll
+popd
+
+pushd build-exe
+  cl %Defines% %Includes% %CompilerFlags% %Main% -Fe:%Name%.exe /link %LinkerFlags% %Libraries% ..\build-core\%Name%-core.lib
 popd
 
 :end

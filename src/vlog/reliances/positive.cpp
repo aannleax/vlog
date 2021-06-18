@@ -444,11 +444,20 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
     std::vector<unsigned> variableCounts;
     variableCounts.reserve(rules.size());
 
-    for (const Rule &currentRule : rules)
-    {
-        unsigned variableCount = std::max(highestLiteralsId(currentRule.getHeads()), highestLiteralsId(currentRule.getBody()));
+    std::vector<unsigned> IDBRuleIndices;
+    IDBRuleIndices.reserve(rules.size());
 
+    for (unsigned ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+    {
+        const Rule &currentRule = rules[ruleIndex];
+
+        unsigned variableCount = std::max(highestLiteralsId(currentRule.getHeads()), highestLiteralsId(currentRule.getBody()));
         variableCounts.push_back(variableCount + 1);
+
+        if (currentRule.getNIDBPredicates() > 0)
+        {
+            IDBRuleIndices.push_back(ruleIndex);
+        }
     }
 
     for (const Rule &currentRule : rules)
@@ -460,7 +469,7 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
 
     for (unsigned ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
     {
-        for (unsigned ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+        for (unsigned ruleTo : IDBRuleIndices)
         {
             if (ruleFrom == ruleTo)
                 continue;

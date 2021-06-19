@@ -18,6 +18,9 @@
 #include <sstream>
 #include <unordered_set>
 
+unsigned executeRuleCount = 0;
+unsigned executeRuleTrueCount = 0;
+
 void SemiNaiver::createGraphRuleDependency(std::vector<int> &nodes,
         std::vector<std::pair<int, int>> &edges) {
     //Add the nodes and edges
@@ -404,6 +407,8 @@ void SemiNaiver::run(size_t lastExecution, size_t it, unsigned long *timeout,
         std::vector<std::vector<RuleExecutionDetails>> emptyExtIDBRules(nStratificationClasses);
         executeRules(allEDBRules, emptyRuleset, allIDBRules, emptyExtIDBRules, costRules, timeout);
     }
+
+    std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << std::endl;
 
     running = false;
     LOG(DEBUGL) << "Finished process. Iterations=" << iteration;
@@ -1188,13 +1193,14 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
     return answer;
 }
 
-
 bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
         std::vector<Literal> &heads,
         const size_t iteration,
         const size_t limitView,
         std::vector<ResultJoinProcessor*> *finalResultContainer) {
     Rule rule = ruleDetails.rule;
+
+    ++executeRuleCount;
 
 #ifdef WEBINTERFACE
     // Cannot run multithreaded in this case.
@@ -1518,6 +1524,9 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
         << ", join " << durationJoin.count() * 1000
         << "ms, consolidation " << durationConsolidation.count() * 1000
         << "ms, retrieving first atom " << durationFirstAtom.count() * 1000 << "ms.";
+
+    if (prodDer)
+        ++executeRuleTrueCount;
 
     return prodDer;
 }

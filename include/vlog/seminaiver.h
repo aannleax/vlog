@@ -82,8 +82,6 @@ class SemiNaiver {
                 const size_t maxIteration,
                 TableFilterer *filter);
 
-        size_t countAllIDBs();
-
         bool bodyChangedSince(Rule &rule, size_t iteration);
 
         bool checkIfAtomsAreEmpty(const RuleExecutionDetails &ruleDetails,
@@ -164,6 +162,8 @@ class SemiNaiver {
         void setIgnoreDuplicatesElimination() {
             ignoreDuplicatesElimination = true;
         }
+
+        size_t countAllIDBs();
 
     public:
         VLIBEXP SemiNaiver(EDBLayer &layer,

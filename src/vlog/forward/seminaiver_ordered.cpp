@@ -105,6 +105,14 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
     for (unsigned groupIndex = 0; groupIndex < groupsResult.groups.size(); ++groupIndex)
     {
         const std::vector<unsigned> &group = groupsResult.groups[groupIndex];
+        std::vector<unsigned> groupSorted = group;
+        auto sortRule = [&allRules] (unsigned index1, unsigned index2) -> bool
+        {
+            return allRules[index1].getId() < allRules[index2].getId();
+        };
+        
+        std::sort(groupSorted.begin(), groupSorted.end(), sortRule);
+        
         PositiveGroup &newGroup = positiveGroups[groupIndex];
 
         newGroup.rules.reserve(group.size());
@@ -112,10 +120,10 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         std::unordered_set<unsigned> successorSet;
         std::unordered_set<unsigned> predecessorSet;
 
-        for (unsigned ruleIndex : group)
+        for (unsigned ruleIndex : groupSorted)
         {
             const Rule &currentRule = allRules[ruleIndex];
-            newGroup.rules.emplace_back(currentRule, currentRule.getId()); //TODO: Check this Id field
+            newGroup.rules.emplace_back(currentRule, currentRule.getId());
 
             newGroup.rules.back().createExecutionPlans(checkCyclicTerms);
             newGroup.rules.back().calculateNVarsInHeadFromEDB();
@@ -167,6 +175,8 @@ bool SemiNaiverOrdered::executeGroup(
 {
     bool result = false;
     bool newDerivations = true;
+    bool first = true;
+
     while (newDerivations)
     {
         newDerivations = false;
@@ -177,11 +187,6 @@ bool SemiNaiverOrdered::executeGroup(
 
         size_t nRulesOnePass = 0;
         size_t lastIteration = 0;
-
-        if ((typeChase == TypeChase::RESTRICTED_CHASE || typeChase == TypeChase::SUM_RESTRICTED_CHASE)) 
-        {
-            limitView = this->iteration == 0 ? 1 : this->iteration;
-        }
 
         std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
         do 
@@ -249,7 +254,7 @@ bool SemiNaiverOrdered::executeGroup(
 #ifdef DEBUG
                 std::chrono::duration<double> sec = std::chrono::system_clock::now() - executionStart;
                 LOG(DEBUGL) << "--Time round " << sec.count() * 1000 << " " << iteration;
-                round_start = std::chrono::system_clock::now();
+                executionStart = std::chrono::system_clock::now();
                 //CODE FOR Statistics
                 LOG(INFOL) << "Finish pass over the rules. Step=" << iteration << ". IDB RulesWithDerivation=" <<
                     nRulesOnePass << " out of " << ruleset.size() << " Derivations so far " << countAllIDBs();
@@ -281,8 +286,6 @@ bool SemiNaiverOrdered::executeGroup(
     return result;
 }
 
-#define RUNMAT 1
-
 void SemiNaiverOrdered::setActive(PositiveGroup *currentGroup)
 {
     currentGroup->active = true;
@@ -292,6 +295,65 @@ void SemiNaiverOrdered::setActive(PositiveGroup *currentGroup)
         setActive(successorGroup);
     }
 }
+
+std::pair<RelianceGraph, RelianceGraph> DEBUGEveryIDBInOneGroup(std::vector<Rule> &rules)
+{
+    RelianceGraph result(rules.size());
+    RelianceGraph resultTransposed(rules.size());
+
+    int firstIDB = -1;
+    int firstEDB = -1;
+    int previousIDB = -1;
+    int previousEDB = -1;
+
+    for (unsigned ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+    {
+        const Rule &currentRule = rules[ruleIndex];
+
+        bool isIDB = currentRule.getNIDBPredicates() > 0;
+
+        if (isIDB && previousIDB == -1)
+        {
+            previousIDB = ruleIndex;
+            firstIDB = ruleIndex;
+
+            continue;
+        }
+        else if (!isIDB && previousEDB == -1)
+        {
+            previousEDB = ruleIndex;
+            firstEDB = ruleIndex;
+
+            continue;
+        }
+
+        if (isIDB)
+        {
+            result.addEdge(previousIDB, ruleIndex);
+            resultTransposed.addEdge(ruleIndex, previousIDB);
+            previousIDB = ruleIndex;
+        }
+        else
+        {
+            result.addEdge(previousEDB, ruleIndex);
+            resultTransposed.addEdge(ruleIndex, previousEDB);
+            previousEDB = ruleIndex;
+        }
+    }
+
+    result.addEdge(previousIDB, firstIDB);
+    resultTransposed.addEdge(firstIDB, previousIDB);
+    result.addEdge(previousEDB, firstEDB);
+    resultTransposed.addEdge(firstEDB, previousEDB);
+
+    result.addEdge(firstEDB, firstIDB);
+    resultTransposed.addEdge(firstIDB, firstEDB);
+
+    return std::make_pair(result, resultTransposed);
+}
+
+
+#define RUNMAT 1
 
 void SemiNaiverOrdered::run(size_t lastExecution,
     size_t iteration,
@@ -312,8 +374,10 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     std::vector<Rule> &allRules = program->getAllRules();
     std::cout << "#Rules: " << allRules.size() << std::endl;
 
+    std::chrono::system_clock::time_point relianceStart = std::chrono::system_clock::now();
     std::cout << "Computing positive reliances..." << std::endl;
     std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(allRules);
+    // std::pair<RelianceGraph, RelianceGraph> relianceGraphs = DEBUGEveryIDBInOneGroup(allRules);
 
     /*std::cout << "Positive reliances: " << std::endl;
     for (unsigned from = 0; from < relianceGraphs.first.edges.size(); ++from)
@@ -324,8 +388,11 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     }*/
 
+    // relianceGraphs.first.saveCSV("graph.csv");
+
     std::cout << "Computing positive reliance groups..." << std::endl;
-    RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);
+    RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);    
+    std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << std::endl;
 
     /*for (vector<unsigned> &group : relianceGroups.groups)
     {
@@ -441,6 +508,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     }
 #endif
+
+    std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << std::endl;
 
     this->running = false;
 }

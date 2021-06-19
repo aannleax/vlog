@@ -52,11 +52,19 @@ IF "%~1" == "release" (
   set CurlDll="libcurl-d.dll"
 )
 
+set DebugDefine=
+IF "%~1" == "debugdefine" (
+  set DebugDefine=-DDEBUG
+)
+IF "%~2" == "debugdefine" (
+  set DebugDefine=-DDEBUG
+)
+
 set CompilerFlags=-nologo -bigobj -MP -Zi -EHsc -w -std:c11 -MD%VersionSuffix% %Optimization%
 set LinkerFlags=
 set Libraries=%ZLibPath%\lib\zlib%VersionSuffix%.lib %Lz4Path%\lib\lz4%VersionSuffix%.lib %CurlPath%\lib\libcurl%VersionSuffix%.lib %KognacPath%\win64\x64\%Version%\kognac-core.lib %TridentPath%\win64\x64\%Version%\trident-core.lib %TridentPath%\win64\x64\%Version%\trident-sparql.lib
 set Includes=-I..\include -I%SparsehashPath%\src -I%ZLibPath%\include -I%Lz4Path%\include -I%CurlPath%\include -I%KognacPath%\include -I%TridentPath%\include -I%TridentPath%\rdf3x\include
-set Defines=-DWIN32 -DNDEBUG -D_CONSOLE -D_MBCS -DBUILDEXE
+set Defines=-DWIN32 -DNDEBUG -D_CONSOLE -D_MBCS -DBUILDEXE %DebugDefine%
 
 pushd build
   cl %Defines% %Includes% %CompilerFlags% %Main% %Core% -Fe:%Name%.exe /link %LinkerFlags% %Libraries%

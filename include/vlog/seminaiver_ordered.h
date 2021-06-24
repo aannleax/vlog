@@ -8,6 +8,8 @@
 #include <stack>
 #include <unordered_set>
 #include <deque>
+#include <algorithm>
+#include <numeric>
 
 class SemiNaiverOrdered: public SemiNaiver {
 public:
@@ -22,6 +24,8 @@ public:
         bool active = false; //can potentially be executed
         bool inQueue = false; //already in queue
         bool triggered = false; //contains rules which may produce new facts
+    
+        std::vector<unsigned> order;
     };
 
     struct RelianceGroupResult
@@ -54,8 +58,15 @@ private:
     RelianceGroupResult computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
     void setActive(PositiveGroup *currentGroup);
 
-    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
+    void orderGroupExistentialLast(PositiveGroup *group);
+    void orderGroupAverageRuntime(PositiveGroup *group);
+    void orderGroupPredicateCount(PositiveGroup *group);
+    void orderGroupManually(PositiveGroup *group);
+
+    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed, const RelianceGraph &blockingGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
     bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool fixpoint, unsigned long *timeout);
+    bool executeGroupBottomUp(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
+    bool executeGroupInOrder(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
 };
 
 #endif

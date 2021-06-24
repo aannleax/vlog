@@ -96,6 +96,7 @@ SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
 
 void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
     const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed,
+    const RelianceGraph &blockingGraphTransposed,
     const RelianceGroupResult &groupsResult, 
     std::vector<PositiveGroup> &positiveGroups)
 {
@@ -119,6 +120,7 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
 
         std::unordered_set<unsigned> successorSet;
         std::unordered_set<unsigned> predecessorSet;
+        std::unordered_set<unsigned> blockingSet;
 
         for (unsigned ruleIndex : groupSorted)
         {
@@ -146,9 +148,21 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
 
                 predecessorSet.insert(predecessorGroup);
             }
+
+            for (unsigned blocker : blockingGraphTransposed.edges[ruleIndex])
+            {
+                unsigned blockerGroup = groupsResult.assignments[blocker];
+                if (blockerGroup == groupIndex) //TODO: This is actually possible
+                    continue;
+
+                blockingSet.insert(blockerGroup);
+            }
         }
 
         std::copy(newGroup.rules.begin(), newGroup.rules.end(), std::back_inserter(allRuleDetails));
+
+        newGroup.order.resize(newGroup.rules.size());
+        std::iota(newGroup.order.begin(), newGroup.order.end(), 0);
 
         for (unsigned successor : successorSet)
         {
@@ -159,12 +173,231 @@ void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, con
         {
             newGroup.predecessors.push_back(&positiveGroups[0] + predecessor);
         }
+
+        for (unsigned blocker : blockingSet)
+        {
+            newGroup.blockers.push_back(&positiveGroups[0] + blocker);
+        }
     }
 
     chaseMgmt = std::shared_ptr<ChaseMgmt>(new ChaseMgmt(allRuleDetails,
         typeChase, checkCyclicTerms,
         singleRuleToCheck,
         predIgnoreBlock));
+}
+
+void SemiNaiverOrdered::orderGroupExistentialLast(PositiveGroup *group)
+{
+    if (group->rules.size() == 1)
+        return;
+
+    std::vector<unsigned> datalogRules, existentialRules;
+
+    for (unsigned ruleIndex = 0; ruleIndex < group->rules.size(); ++ruleIndex)
+    {
+        RuleExecutionDetails &currentDetails = group->rules[ruleIndex];
+
+        if (currentDetails.rule.isExistential())
+        {
+            existentialRules.push_back(ruleIndex);
+        }
+        else
+        {
+            datalogRules.push_back(ruleIndex);
+        }
+    }
+
+    group->order = datalogRules;
+    group->order.insert(group->order.end(), existentialRules.begin(), existentialRules.end());
+}
+
+void SemiNaiverOrdered::orderGroupAverageRuntime(PositiveGroup *group)
+{
+
+}
+
+void SemiNaiverOrdered::orderGroupManually(PositiveGroup *group)
+{
+    // const std::vector<unsigned> manualGroup = {0, 9, 8, 3, 5, 1, 7, 6, 4, 2}; // fast
+    // const std::vector<unsigned> manualGroup = {0, 9, 8, 3, 5, 1, 7, 2, 4, 6}; // slow
+    // const std::vector<unsigned> manualGroup = {0, 9, 8, 3, 5, 1, 7, 4, 6, 2}; // slow
+    // const std::vector<unsigned> manualGroup = {0, 8, 3, 5, 1, 7, 9, 6, 2, 4}; // slow
+    // const std::vector<unsigned> manualGroup = {0, 8, 3, 5, 1, 7, 9, 6, 4, 2};
+    // const std::vector<unsigned> manualGroup = {2, 4, 6, 7, 1, 5, 3, 8, 9, 0};
+    const std::vector<unsigned> manualGroup = {9, 6, 4, 2, 0, 7, 3, 5, 1, 7};
+
+
+
+    if (group->order.size() == manualGroup.size())
+        group->order = manualGroup;
+}
+
+void SemiNaiverOrdered::orderGroupPredicateCount(PositiveGroup *group)
+{
+    if (group->rules.size() == 1)
+        return;
+
+    const auto sortFunction = [&] (unsigned left, unsigned right) -> bool 
+    {
+        unsigned leftPredicateCount = group->rules[left].rule.getBody().size() + group->rules[left].rule.getHeads().size();
+        unsigned rightPredicateCount = group->rules[right].rule.getBody().size() + group->rules[right].rule.getHeads().size();
+        
+        if (leftPredicateCount != rightPredicateCount)
+            return leftPredicateCount < rightPredicateCount;
+    
+        unsigned leftArgumentSum = 0, rightArgumentSum = 0;
+
+        for (const Literal &currentLiteral : group->rules[left].rule.getBody())
+            leftArgumentSum += currentLiteral.getPredicate().getCardinality();
+        
+        for (const Literal &currentLiteral : group->rules[left].rule.getHeads())
+            leftArgumentSum += currentLiteral.getPredicate().getCardinality();
+        
+        for (const Literal &currentLiteral : group->rules[right].rule.getBody())
+            rightArgumentSum += currentLiteral.getPredicate().getCardinality();
+        
+        for (const Literal &currentLiteral : group->rules[right].rule.getHeads())
+            rightArgumentSum += currentLiteral.getPredicate().getCardinality();
+        
+        return leftArgumentSum < rightArgumentSum;
+    };
+
+    std::sort(group->order.begin(), group->order.end(), sortFunction);
+
+    for (unsigned index : group->order)
+    {
+        std::cout << group->rules[index].rule.getId() << "(" << index << ") ";
+    }
+    std::cout << std::endl;
+}
+
+bool SemiNaiverOrdered::executeGroupBottomUp(
+    std::vector<RuleExecutionDetails> &ruleset,
+    std::vector<unsigned> &rulesetOrder,
+    std::vector<StatIteration> &costRules,
+    bool blocked, unsigned long *timeout
+)
+{
+    bool result = false;
+
+    std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
+    for (unsigned currentRuleIndex = 0; currentRuleIndex < ruleset.size(); ++currentRuleIndex)
+    {
+        unsigned currentRule = rulesetOrder[currentRuleIndex];
+        RuleExecutionDetails &currentRuleDetail = ruleset[currentRule];
+
+        std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
+        
+        bool response = executeRule(currentRuleDetail, iteration, 0, NULL);
+        result |= response;
+
+        if (timeout != NULL && *timeout != 0) 
+        {
+            std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
+            if (runDuration.count() > *timeout) {
+                *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                return result;
+            }
+        }
+
+        std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
+        StatIteration stat;
+        stat.iteration = iteration;
+        stat.rule = &ruleset[currentRule].rule;
+        stat.time = iterationDuration.count() * 1000;
+        stat.derived = response;
+        costRules.push_back(stat);
+
+        ruleset[currentRule].lastExecution = iteration;
+        iteration++;
+
+        if (checkCyclicTerms) {
+            foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
+            if (foundCyclicTerms) {
+                LOG(DEBUGL) << "Found a cyclic term";
+                return result;
+            }
+        }
+
+        if (response)
+            currentRuleIndex = (unsigned)-1;
+    }
+
+    return result;
+}
+
+bool SemiNaiverOrdered::executeGroupInOrder(
+    std::vector<RuleExecutionDetails> &ruleset,
+    std::vector<unsigned> &rulesetOrder,
+    std::vector<StatIteration> &costRules,
+    bool blocked, unsigned long *timeout
+)
+{
+    bool result = false;
+
+    size_t currentRuleIndex = 0;
+    uint32_t rulesWithoutDerivation = 0; 
+
+    size_t nRulesOnePass = 0;
+    size_t lastIteration = 0;
+
+    std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
+    do 
+    {
+        size_t currentRule = rulesetOrder[currentRuleIndex];
+        std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
+        bool response = executeRule(ruleset[currentRule], iteration, 0, NULL);
+
+        result |= response;
+
+        if (timeout != NULL && *timeout != 0) 
+        {
+            std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
+            if (runDuration.count() > *timeout) {
+                *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                return result;
+            }
+        }
+
+        std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
+        StatIteration stat;
+        stat.iteration = iteration;
+        stat.rule = &ruleset[currentRule].rule;
+        stat.time = iterationDuration.count() * 1000;
+        stat.derived = response;
+        costRules.push_back(stat);
+
+        ruleset[currentRule].lastExecution = iteration;
+        iteration++;
+
+        if (checkCyclicTerms) {
+            foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
+            if (foundCyclicTerms) {
+                LOG(DEBUGL) << "Found a cyclic term";
+                return result;
+            }
+        }
+
+        if (response)
+        {
+            rulesWithoutDerivation = 0;
+            nRulesOnePass++;
+        }
+        else
+        {
+            rulesWithoutDerivation++;
+        }
+
+        currentRuleIndex = (currentRuleIndex + 1) % ruleset.size();
+
+        if (currentRuleIndex == 0) 
+        {
+            if (!blocked)
+                return result;
+        }
+    } while (rulesWithoutDerivation != ruleset.size());
+
+    return result;
 }
 
 bool SemiNaiverOrdered::executeGroup(
@@ -174,114 +407,95 @@ bool SemiNaiverOrdered::executeGroup(
 )
 {
     bool result = false;
-    bool newDerivations = true;
-    bool first = true;
 
-    while (newDerivations)
+    size_t currentRule = 0;
+    uint32_t rulesWithoutDerivation = 0; 
+
+    size_t nRulesOnePass = 0;
+    size_t lastIteration = 0;
+
+    std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
+    do 
     {
-        newDerivations = false;
-        int limitView = 0;
+        std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
+        bool response = executeRule(ruleset[currentRule], iteration, 0, NULL);
 
-        size_t currentRule = 0;
-        uint32_t rulesWithoutDerivation = 0; 
+        result |= response;
 
-        size_t nRulesOnePass = 0;
-        size_t lastIteration = 0;
-
-        std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
-        do 
+        if (timeout != NULL && *timeout != 0) 
         {
-            std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
-            bool response = executeRule(ruleset[currentRule], iteration, limitView, NULL);
-
-            result |= response;
-            newDerivations |= response;
-
-            if (timeout != NULL && *timeout != 0) 
-            {
-                std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
-                if (runDuration.count() > *timeout) {
-                    *timeout = 0;   // To indicate materialization was stopped because of timeout.
-                    return result;
-                }
+            std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
+            if (runDuration.count() > *timeout) {
+                *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                return result;
             }
+        }
 
-            std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
-            StatIteration stat;
-            stat.iteration = iteration;
-            stat.rule = &ruleset[currentRule].rule;
-            stat.time = iterationDuration.count() * 1000;
-            stat.derived = response;
-            costRules.push_back(stat);
+        std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
+        StatIteration stat;
+        stat.iteration = iteration;
+        stat.rule = &ruleset[currentRule].rule;
+        stat.time = iterationDuration.count() * 1000;
+        stat.derived = response;
+        costRules.push_back(stat);
 
-            if (limitView > 0) 
-            {
-                // Don't use iteration here, because lastExecution determines which data we'll look at during the next round,
-                // and limitView determines which data we are considering now. There should not be a gap.
-                ruleset[currentRule].lastExecution = limitView;
-                LOG(DEBUGL) << "Setting lastExecution of this rule to " << limitView;
-            } 
-            else 
-            {
-                ruleset[currentRule].lastExecution = iteration;
+        ruleset[currentRule].lastExecution = iteration;
+        iteration++;
+
+        if (checkCyclicTerms) {
+            foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
+            if (foundCyclicTerms) {
+                LOG(DEBUGL) << "Found a cyclic term";
+                return result;
             }
-            iteration++;
+        }
 
-            if (checkCyclicTerms) {
-                foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
-                if (foundCyclicTerms) {
-                    LOG(DEBUGL) << "Found a cyclic term";
-                    return result;
-                }
-            }
+        if (response)
+        {
+            rulesWithoutDerivation = 0;
+            nRulesOnePass++;
+        }
+        else
+        {
+            rulesWithoutDerivation++;
+        }
 
-            if (response)
-            {
-                rulesWithoutDerivation = 0;
-                nRulesOnePass++;
-            }
-            else
-            {
-                rulesWithoutDerivation++;
-            }
+        currentRule = (currentRule + 1) % ruleset.size();
 
-            currentRule = (currentRule + 1) % ruleset.size();
-
-            if (currentRule == 0) 
-            {
-                if (!blocked)
-                    return result;
+        if (currentRule == 0) 
+        {
+            if (!blocked)
+                return result;
 #ifdef DEBUG
-                std::chrono::duration<double> sec = std::chrono::system_clock::now() - executionStart;
-                LOG(DEBUGL) << "--Time round " << sec.count() * 1000 << " " << iteration;
-                executionStart = std::chrono::system_clock::now();
-                //CODE FOR Statistics
-                LOG(INFOL) << "Finish pass over the rules. Step=" << iteration << ". IDB RulesWithDerivation=" <<
-                    nRulesOnePass << " out of " << ruleset.size() << " Derivations so far " << countAllIDBs();
-                printCountAllIDBs("After step " + to_string(iteration) + ": ");
-                nRulesOnePass = 0;
+            std::chrono::duration<double> sec = std::chrono::system_clock::now() - executionStart;
+            LOG(DEBUGL) << "--Time round " << sec.count() * 1000 << " " << iteration;
+            executionStart = std::chrono::system_clock::now();
+            //CODE FOR Statistics
+            LOG(INFOL) << "Finish pass over the rules. Step=" << iteration << ". IDB RulesWithDerivation=" <<
+                nRulesOnePass << " out of " << ruleset.size() << " Derivations so far " << countAllIDBs();
+            printCountAllIDBs("After step " + to_string(iteration) + ": ");
+            nRulesOnePass = 0;
 
-                //Get the top 10 rules in the last iteration
-                std::sort(costRules.begin(), costRules.end());
-                std::string out = "";
-                int n = 0;
-                for (const auto &exec : costRules) {
-                    if (exec.iteration >= lastIteration) {
-                        if (n < 10 || exec.derived) {
-                            out += "Iteration " + to_string(exec.iteration) + " runtime " + to_string(exec.time);
-                            out += " " + exec.rule->tostring(program, &layer) + " response " + to_string(exec.derived);
-                            out += "\n";
-                        }
-                        n++;
+            //Get the top 10 rules in the last iteration
+            std::sort(costRules.begin(), costRules.end());
+            std::string out = "";
+            int n = 0;
+            for (const auto &exec : costRules) {
+                if (exec.iteration >= lastIteration) {
+                    if (n < 10 || exec.derived) {
+                        out += "Iteration " + to_string(exec.iteration) + " runtime " + to_string(exec.time);
+                        out += " " + exec.rule->tostring(program, &layer) + " response " + to_string(exec.derived);
+                        out += "\n";
                     }
+                    n++;
                 }
-                LOG(DEBUGL) << "Rules with the highest cost\n\n" << out;
-                lastIteration = iteration;
-                //END CODE STATISTICS
-#endif
             }
-        } while (rulesWithoutDerivation != ruleset.size());
-    }
+            LOG(DEBUGL) << "Rules with the highest cost\n\n" << out;
+            lastIteration = iteration;
+            //END CODE STATISTICS
+#endif
+        }
+    } while (rulesWithoutDerivation != ruleset.size());
 
     return result;
 }
@@ -352,6 +566,53 @@ std::pair<RelianceGraph, RelianceGraph> DEBUGEveryIDBInOneGroup(std::vector<Rule
     return std::make_pair(result, resultTransposed);
 }
 
+std::pair<RelianceGraph, RelianceGraph> DEBUGblockingGraphOfLUBM(unsigned ruleSize)
+{
+    RelianceGraph result(ruleSize), resultTransposed(ruleSize);
+
+    std::vector<unsigned> neighbors42 =
+        {4, 10};
+
+    std::vector<unsigned> neighbors49 =
+        {10};
+
+    std::vector<unsigned> neighbors55 =
+        {10};
+
+    std::vector<unsigned> neighbors62 = 
+        {29, 33, 34, 46, 54, 72, 73, 82, 86, 95, 104, 114, 115, 132};
+
+    std::vector<unsigned> neighbors67 =
+        {21, 8};
+
+    std::vector<unsigned> neighbors103 = 
+        {18, 29, 72, 106};
+    
+    std::vector<unsigned> neighbors113 = 
+        {3, 21, 65, 76, 118, 122};
+
+    std::vector<unsigned> neighbors121 = 
+        {3, 24, 65, 76, 118, 122};
+
+    auto addAllEdges = [&] (unsigned node, const std::vector<unsigned> &neighbors) -> void {
+        for (unsigned neighbor : neighbors)
+        {
+            result.addEdge(neighbor, node);
+            resultTransposed.addEdge(node, neighbor);
+        }
+    };
+
+    addAllEdges(42, neighbors42);
+    addAllEdges(49, neighbors49);
+    addAllEdges(55, neighbors55);
+    addAllEdges(62, neighbors62);
+    addAllEdges(67, neighbors67);
+    addAllEdges(103, neighbors103);
+    addAllEdges(113, neighbors113);
+    addAllEdges(121, neighbors121);
+    
+    return std::make_pair(result, resultTransposed);
+}
 
 #define RUNMAT 1
 
@@ -410,9 +671,27 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::vector<StatIteration> costRules;
 
+    std::cout << "Computing blocking reliances..." << std::endl;
+    std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
+    std::cout << "Blocking computation took " << "some time" << std::endl;
+
+    for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
+    {
+        const std::vector<unsigned> blockingNodes = blockingGraphs.second.edges[blockedIndex];
+
+        if (blockingNodes.size() > 0)
+            std::cout << allRules[blockedIndex].tostring(program, &layer) << '\n';
+        
+        for (unsigned blockingNode : blockingNodes)
+        {
+            std::cout << '\t' << allRules[blockingNode].tostring(program, &layer) << '\n';
+        }
+    }
+    std::cout << std::endl;
+
 #if RUNMAT
     std::vector<PositiveGroup> positiveGroups;
-    prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGraphs.second, relianceGroups, positiveGroups);
+    prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGraphs.second, blockingGraphs.second, relianceGroups, positiveGroups);
 
     std::deque<PositiveGroup *> positiveStack;
 
@@ -437,6 +716,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         PositiveGroup *currentGroup = positiveStack.front();
         positiveStack.pop_front();
         currentGroup->inQueue = false;
+        currentGroup->active = false;
 
         bool hasActivePredecessors = false;
         for (PositiveGroup *predecessorGroup : currentGroup->predecessors)
@@ -452,9 +732,13 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         {
             bool newDerivations = false;
             bool isBlocked = false;
+            bool hasBeenExecuted = false;
             
             if (currentGroup->triggered)
             {
+                // orderGroupManually(currentGroup);
+                // orderGroupPredicateCount(currentGroup);
+
                 for (PositiveGroup *blockingGroup : currentGroup->blockers)
                 {
                     if (blockingGroup->active)
@@ -464,9 +748,16 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                     }
                 }
 
+                //if (currentGroup == firstBlockedGroup)
+                    //std::cout << "Queue is has no unblocked triggered members" << std::endl;
+
                 if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
                     newDerivations = executeGroup(currentGroup->rules, costRules, !isBlocked, timeout);
+                    // newDerivations = executeGroupInOrder(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);
+                    // newDerivations = executeGroupBottomUp(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);
+
+                    hasBeenExecuted = true;
                 }
 
                 if (isBlocked && firstBlockedGroup == nullptr)
@@ -479,17 +770,14 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                 }
             }
 
-            if (!isBlocked)
-            {
-                currentGroup->active = false;
-            }
-            else
+            if (isBlocked && (!hasBeenExecuted || newDerivations))
             {
                 positiveStack.push_back(currentGroup);
                 currentGroup->inQueue = true;
+                currentGroup->active = true;
             }
 
-            if (newDerivations || !isBlocked)
+            if (newDerivations || !currentGroup->active)
             {
                 for (PositiveGroup *successorGroup : currentGroup->successors)
                 {

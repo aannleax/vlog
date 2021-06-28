@@ -82,8 +82,6 @@ class SemiNaiver {
                 const size_t maxIteration,
                 TableFilterer *filter);
 
-        bool bodyChangedSince(Rule &rule, size_t iteration);
-
         bool checkIfAtomsAreEmpty(const RuleExecutionDetails &ruleDetails,
                 const RuleExecutionPlan &plan,
                 size_t limitView,
@@ -137,6 +135,9 @@ class SemiNaiver {
         std::vector<std::vector<RuleExecutionDetails>> allIDBRules; // one entry for each stratification class
         size_t iteration;
         int nthreads;
+
+        //Moved from private
+        bool bodyChangedSince(Rule &rule, size_t iteration);
 
         bool executeRule(RuleExecutionDetails &ruleDetails,
                 const size_t iteration,

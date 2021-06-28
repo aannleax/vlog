@@ -21,6 +21,8 @@ struct RuleExecutionDetails {
     std::vector<std::pair<uint8_t,
         std::vector<std::pair<int, uint8_t>>>> edbLiteralPerHeadVars;
 
+    double executionTime = 0;
+    double cardinalitySum = 1;
 
     RuleExecutionDetails(Rule rule, size_t ruleid) : rule(rule), ruleid(ruleid) {
         std::vector<Literal> bodyLiterals = rule.getBody();

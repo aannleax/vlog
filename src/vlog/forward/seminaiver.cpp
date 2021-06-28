@@ -1528,6 +1528,9 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
     if (prodDer)
         ++executeRuleTrueCount;
 
+    std::string trueFalseString = prodDer ? "true" : "false";
+    std::cout << "Executed rule " << ruleDetails.rule.getId() << ": " << trueFalseString << '\n';
+
     return prodDer;
 }
 

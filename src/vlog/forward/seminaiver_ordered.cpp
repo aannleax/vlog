@@ -211,11 +211,6 @@ void SemiNaiverOrdered::orderGroupExistentialLast(PositiveGroup *group)
     group->order.insert(group->order.end(), existentialRules.begin(), existentialRules.end());
 }
 
-void SemiNaiverOrdered::orderGroupAverageRuntime(PositiveGroup *group)
-{
-
-}
-
 void SemiNaiverOrdered::orderGroupManually(PositiveGroup *group)
 {
     // const std::vector<unsigned> manualGroup = {0, 9, 8, 3, 5, 1, 7, 6, 4, 2}; // fast
@@ -269,6 +264,138 @@ void SemiNaiverOrdered::orderGroupPredicateCount(PositiveGroup *group)
         std::cout << group->rules[index].rule.getId() << "(" << index << ") ";
     }
     std::cout << std::endl;
+}
+
+
+//TODO: Does not support blocking
+bool SemiNaiverOrdered::executeGroupAverageRuntime(
+    std::vector<RuleExecutionDetails> &ruleset,
+    std::vector<StatIteration> &costRules,
+    bool blocked, unsigned long *timeout)
+{
+    bool result = false;
+
+    size_t currentRule = 0;
+    uint32_t rulesWithoutDerivation = 0; 
+
+    size_t nRulesOnePass = 0;
+    size_t lastIteration = 0;
+
+    double falseExecutionTimeSum = 0.0;
+
+    std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
+    do 
+    {
+        std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
+        
+        ruleset[currentRule].cardinalitySum = 0.0;
+        for (const Literal &currentLiteral : ruleset[currentRule].rule.getBody())
+        {
+            if (currentLiteral.getPredicate().getType() == EDB)
+            {
+                ruleset[currentRule].cardinalitySum += (double)layer.estimateCardinality(currentLiteral);
+            }
+            else
+            {
+                ruleset[currentRule].cardinalitySum += (double)estimateCardinality(currentLiteral, 0, iteration);
+            }
+        }
+
+        bool response = executeRule(ruleset[currentRule], iteration, 0, NULL);
+
+        result |= response;
+
+        if (timeout != NULL && *timeout != 0) 
+        {
+            std::chrono::duration<double> runDuration = std::chrono::system_clock::now() - startTime;
+            if (runDuration.count() > *timeout) {
+                *timeout = 0;   // To indicate materialization was stopped because of timeout.
+                return result;
+            }
+        }
+
+        std::chrono::duration<double> iterationDuration = std::chrono::system_clock::now() - iterationStart;
+        StatIteration stat;
+        stat.iteration = iteration;
+        stat.rule = &ruleset[currentRule].rule;
+        stat.time = iterationDuration.count() * 1000;
+        stat.derived = response;
+        costRules.push_back(stat);
+
+        ruleset[currentRule].executionTime += (double)iterationDuration.count();
+        ruleset[currentRule].lastExecution = iteration;
+        iteration++;
+
+        if (!response)
+        {
+            // std::cout << "False execution: " << (double)iterationDuration.count() << '\n';
+            falseExecutionTimeSum += (double)iterationDuration.count();
+        }
+
+        if (checkCyclicTerms) {
+            foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
+            if (foundCyclicTerms) {
+                LOG(DEBUGL) << "Found a cyclic term";
+                return result;
+            }
+        }
+
+        if (response)
+        {
+            rulesWithoutDerivation = 0;
+            nRulesOnePass++;
+        }
+        else
+        {
+            rulesWithoutDerivation++;
+        }
+
+        currentRule = 0;
+        double ruleEffectiveness = 0.0; // std::numeric_limits<double>::infinity();
+        bool noNextRule = true;
+        for (unsigned ruleIndex = 0; ruleIndex < ruleset.size(); ++ruleIndex)
+        {
+            RuleExecutionDetails &currentDetails = ruleset[ruleIndex];
+            Rule rule = currentDetails.rule;
+
+            if (!bodyChangedSince(rule, currentDetails.lastExecution))
+                continue;
+
+            if (currentDetails.executionTime == 0)
+            {
+                currentRule = ruleIndex;
+                noNextRule = false;
+                break;
+            }
+
+            double currentEffectiveness = currentDetails.cardinalitySum / currentDetails.executionTime;
+
+            //NOTE: We execute effective rules first
+            if (currentEffectiveness > ruleEffectiveness)
+            {
+                currentRule = ruleIndex;
+                ruleEffectiveness = currentEffectiveness;
+            }
+
+            noNextRule = false;
+        }
+
+        if (noNextRule)
+            break;
+    } while (rulesWithoutDerivation != ruleset.size());
+
+    for (unsigned ruleIndex = 0; ruleIndex < ruleset.size(); ++ruleIndex)
+    {
+        RuleExecutionDetails &currentDetails = ruleset[ruleIndex];
+    
+        double currentEffectiveness = currentDetails.cardinalitySum / currentDetails.executionTime;
+
+        std::cout << currentEffectiveness << ", " << currentDetails.executionTime << ": " << currentDetails.rule.tostring(program, &layer) << std::endl;
+    }
+
+    std::cout << "False Execution time: " << falseExecutionTimeSum << std::endl;
+
+    return result;
 }
 
 bool SemiNaiverOrdered::executeGroupBottomUp(
@@ -414,6 +541,8 @@ bool SemiNaiverOrdered::executeGroup(
     size_t nRulesOnePass = 0;
     size_t lastIteration = 0;
 
+    double falseExecutionTimeSum = 0.0;
+
     std::chrono::system_clock::time_point executionStart = std::chrono::system_clock::now();
     do 
     {
@@ -439,8 +568,12 @@ bool SemiNaiverOrdered::executeGroup(
         stat.derived = response;
         costRules.push_back(stat);
 
+        ruleset[currentRule].executionTime += (double)iterationDuration.count();
         ruleset[currentRule].lastExecution = iteration;
         iteration++;
+
+        if (!response)
+            falseExecutionTimeSum += (double)iterationDuration.count();;
 
         if (checkCyclicTerms) {
             foundCyclicTerms = chaseMgmt->checkCyclicTerms(currentRule);
@@ -496,6 +629,17 @@ bool SemiNaiverOrdered::executeGroup(
 #endif
         }
     } while (rulesWithoutDerivation != ruleset.size());
+
+    // for (unsigned ruleIndex = 0; ruleIndex < ruleset.size(); ++ruleIndex)
+    // {
+    //     RuleExecutionDetails &currentDetails = ruleset[ruleIndex];
+    
+    //     double currentEffectiveness = currentDetails.cardinalitySum / currentDetails.executionTime;
+
+    //     std::cout << currentEffectiveness << ", " << currentDetails.executionTime << ": " << currentDetails.rule.tostring(program, &layer) << std::endl;
+    // }
+
+    // std::cout << "False Execution time: " << falseExecutionTimeSum << std::endl;
 
     return result;
 }
@@ -671,9 +815,10 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::vector<StatIteration> costRules;
 
-    std::cout << "Computing blocking reliances..." << std::endl;
-    std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
-    std::cout << "Blocking computation took " << "some time" << std::endl;
+    std::pair<RelianceGraph, RelianceGraph> blockingGraphs = std::make_pair(RelianceGraph(allRules.size()), RelianceGraph(allRules.size()));
+    // std::cout << "Computing blocking reliances..." << std::endl;
+    // std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
+    // std::cout << "Blocking computation took " << "some time" << std::endl;
 
     for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
     {
@@ -756,7 +901,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                     newDerivations = executeGroup(currentGroup->rules, costRules, !isBlocked, timeout);
                     // newDerivations = executeGroupInOrder(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);
                     // newDerivations = executeGroupBottomUp(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);
-
+                    // newDerivations = executeGroupAverageRuntime(currentGroup->rules, costRules, !isBlocked, timeout);
+                
                     hasBeenExecuted = true;
                 }
 

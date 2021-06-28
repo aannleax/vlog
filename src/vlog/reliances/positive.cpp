@@ -487,3 +487,45 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
 
     return std::make_pair(result, resultTransposed);
 }
+
+unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const RelianceGraph &positiveGraph)
+{
+    unsigned result = 0;
+
+    for (unsigned ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+    {
+        for (unsigned ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+        {
+            if (ruleFrom == ruleTo)
+                continue;
+
+            if (positiveGraph.containsEdge(ruleFrom, ruleTo))
+                continue;
+
+            bool headPredicateInBody = false;
+
+            for (const Literal &headLiteral : rules[ruleFrom].getHeads())
+            {
+                for (const Literal &bodyLiteral : rules[ruleTo].getBody())
+                {
+                    if (headLiteral.getPredicate().getId() == bodyLiteral.getPredicate().getId())
+                    {
+                        headPredicateInBody = true;
+                        break;
+                    }
+                }
+
+                if (headPredicateInBody)
+                    break;
+            }
+
+            if (headPredicateInBody)
+            {
+                std::cout << "Found fake reliance from " << ruleFrom << " to " << ruleTo << '\n';
+                ++result;
+            }
+        }
+    }
+
+    return result;
+}

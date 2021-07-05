@@ -864,7 +864,6 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         PositiveGroup *currentGroup = positiveStack.front();
         positiveStack.pop_front();
         currentGroup->inQueue = false;
-        currentGroup->active = false;
 
         bool hasActivePredecessors = false;
         for (PositiveGroup *predecessorGroup : currentGroup->predecessors)
@@ -918,6 +917,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                     firstBlockedGroup = nullptr;
                 }
             }
+
+            currentGroup->active = false;
 
             if (isBlocked && (!hasBeenExecuted || newDerivations))
             {

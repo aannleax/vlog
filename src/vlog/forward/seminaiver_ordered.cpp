@@ -793,8 +793,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     }*/
 
-    unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, relianceGraphs.first);
-    std::cout << "There are " << fakeReliances << " fake reliances." << std::endl;
+    // unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, relianceGraphs.first);
+    // std::cout << "There are " << fakeReliances << " fake reliances." << std::endl;
 
     // relianceGraphs.first.saveCSV("graph.csv");
 
@@ -818,24 +818,27 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::vector<StatIteration> costRules;
 
-    std::pair<RelianceGraph, RelianceGraph> blockingGraphs = std::make_pair(RelianceGraph(allRules.size()), RelianceGraph(allRules.size()));
-    // std::cout << "Computing blocking reliances..." << std::endl;
+    //std::pair<RelianceGraph, RelianceGraph> blockingGraphs = std::make_pair(RelianceGraph(allRules.size()), RelianceGraph(allRules.size()));
+    std::cout << "Computing blocking reliances..." << std::endl;
+    std::pair<RelianceGraph, RelianceGraph> blockingGraphs = computeRestrainReliances(allRules);
     // std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
-    // std::cout << "Blocking computation took " << "some time" << std::endl;
+    std::cout << "Blocking computation took " << "some time" << std::endl;
 
-    for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
-    {
-        const std::vector<unsigned> blockingNodes = blockingGraphs.second.edges[blockedIndex];
+    blockingGraphs.first.saveCSV("blocking.csv");
 
-        if (blockingNodes.size() > 0)
-            std::cout << allRules[blockedIndex].tostring(program, &layer) << '\n';
+    // for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
+    // {
+    //     const std::vector<unsigned> blockingNodes = blockingGraphs.second.edges[blockedIndex];
+
+    //     if (blockingNodes.size() > 0)
+    //         std::cout << allRules[blockedIndex].tostring(program, &layer) << '\n';
         
-        for (unsigned blockingNode : blockingNodes)
-        {
-            std::cout << '\t' << allRules[blockingNode].tostring(program, &layer) << '\n';
-        }
-    }
-    std::cout << std::endl;
+    //     for (unsigned blockingNode : blockingNodes)
+    //     {
+    //         std::cout << '\t' << allRules[blockingNode].tostring(program, &layer) << '\n';
+    //     }
+    // }
+    // std::cout << std::endl;
 
 #if RUNMAT
     std::vector<PositiveGroup> positiveGroups;

@@ -45,6 +45,7 @@
 #include "vlog/odbc/odbctable.cpp"
 #include "vlog/reasoner.cpp"
 #include "vlog/reliances/positive.cpp"
+#include "vlog/reliances/restrain.cpp"
 #include "vlog/sparql/sparqliterator.cpp"
 #include "vlog/sparql/sparqltable.cpp"
 #include "vlog/text/elastictable.cpp"

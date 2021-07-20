@@ -50,6 +50,7 @@ struct RelianceGraph
 };
 
 std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rule> &rules);
+std::pair<RelianceGraph, RelianceGraph> computeRestrainReliances(std::vector<Rule> &rules);
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const RelianceGraph &positiveGraph);
 
 #endif

@@ -88,11 +88,11 @@ void positiveChangeGroup(std::vector<int64_t> &assignments, int64_t originalGrou
 int64_t positiveGetAssignedConstant(VTerm term, 
     const std::vector<int64_t> &assignment, const std::vector<VariableAssignments::Group> &groups)
 {
-    if (term.getId() == 0)
+    if (term.getId() == 0) // constant
         return term.getValue();
-    else if ((int32_t)term.getId() < 0)
+    else if ((int32_t)term.getId() < 0) // existential variable (=null)
         return (int32_t)term.getId();
-    else 
+    else // universal variable
       if (assignment[term.getId()] == NOT_ASSIGNED)
          return NOT_ASSIGNED;
       else
@@ -112,6 +112,7 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
         int64_t fromConstant = positiveGetAssignedConstant(fromTerm, assignments.from, assignments.groups);
         int64_t toConstant = positiveGetAssignedConstant(toTerm, assignments.to, assignments.groups);
 
+        // Case 1: Both terms are either constants/nulls or variables assigned to a group which is mapped to a constant/null
         if (fromConstant != NOT_ASSIGNED && toConstant != NOT_ASSIGNED)
         {
             if (fromConstant != toConstant)
@@ -123,12 +124,15 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
                 continue;
             }
         }
+        // Case 2: Both terms are variables where at least one of them is not in a group or in a group with not constant/null assigned
         else if ((int32_t)fromTerm.getId() > 0 && (int32_t)toTerm.getId() > 0)
         {
             int64_t &fromGroupId = assignments.from[fromTerm.getId()];
             int64_t &toGroupId = assignments.to[toTerm.getId()];
         
-            if (fromGroupId== NOT_ASSIGNED && toGroupId == NOT_ASSIGNED)
+            // Case 2a: Both terms are variables not assigned to a group
+            // We therefore need to create a new group and assign both variables to the new group
+            if (fromGroupId == NOT_ASSIGNED && toGroupId == NOT_ASSIGNED)
             {
                 int64_t newGroupId = (int64_t)assignments.groups.size();
                 assignments.groups.emplace_back();
@@ -136,8 +140,11 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
                 fromGroupId = newGroupId;
                 toGroupId = newGroupId;
             }
+            // Case 2b: Both terms are variabels which have been assigned to a group
+            // Note: Because case 1 is already handled there is at least one group with no assigned constant/null
             else if (fromGroupId != NOT_ASSIGNED && toGroupId != NOT_ASSIGNED)
             {
+                // If both terms are in the same group then everything is fine
                 if (fromGroupId == toGroupId)
                 {
                     continue;
@@ -146,16 +153,21 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
                 int64_t fromValue = assignments.groups[fromGroupId].value;
                 int64_t toValue = assignments.groups[toGroupId].value;
                 
+                // If there is a group with an assigned value then newValue will equal that group's value (or NOT_ASSIGNED otherwise)
                 int64_t newValue = (fromValue == NOT_ASSIGNED) ? toValue : fromValue;
 
+                // Since nulls can only be assigned to variables in the body of toRule this must mean 
+                // that we are about to assign a (universal) variable in the head of fromRule to a null which is invalid
                 if (newValue < 0) 
-                {
                     return false;
-                }
 
+                // We merge fromGroup and toGroup by assigning each member of toGroup to fromGroup
+                // and setting the value of fromGroup to the value to newValue
                 assignments.groups[fromGroupId].value = newValue;
                 positiveChangeGroup(assignments.to, toGroupId, fromGroupId);
             }
+            // Case 2c: Both terms are variables where one belongs to a group and the other one doesn't
+            // Here we need to add the variable without a group to the group of the variable which is already in a group
             else
             {
                 int64_t groupId = (fromGroupId == NOT_ASSIGNED) ? toGroupId : fromGroupId;
@@ -163,14 +175,14 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
                 VariableAssignments::Group &group = assignments.groups[groupId];
                 int64_t groupConstant = group.value;
 
-                if (fromGroupId == NOT_ASSIGNED && groupConstant < 0)
-                {
+                // We cannot assign a universal variable from the FromRule into a group which is mapped to a null
+                if (groupConstant < 0) // && fromGroupId == NOT_ASSIGNED since a variable in the head of fromRule couldn't have been assigned a null 
                     return false;
-                }
 
                 noGroupId = groupId;
             }
         }
+        // Case 3: One term is a variable with no group or a group with no value, the other term is a constant/null
         else 
         {
             int64_t variableId = ((int32_t)fromTerm.getId() > 0) ? fromTerm.getId() : toTerm.getId();
@@ -179,6 +191,7 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
             int64_t &groupId = assignmentVector[variableId];
             int64_t constant = ((int32_t)fromTerm.getId() > 0) ? toConstant : fromConstant;
 
+            // If the variable does not belong to a group then create a new group with the value of the constant/null
             if (groupId == NOT_ASSIGNED)
             {
                 int64_t newGroupId = (int64_t)assignments.groups.size();
@@ -186,12 +199,12 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
                
                 groupId = newGroupId;
             }
+            // If the variable belongs to group then set the group value to the constant
             else 
             {
+                // A group always consits of at least one universal variable from fromRule which cannot be assigned a null
                 if (constant < 0)
-                {
                     return false;
-                }
                 
                 assignments.groups[groupId].value = constant;
             }
@@ -271,7 +284,7 @@ bool positiveModels(const std::vector<Literal> &left, const std::vector<int64_t>
                     break;
                 }
                 
-                if (leftConstant == NOT_ASSIGNED) //it follows the rightConstant == NOT_ASSIGNED
+                if (leftConstant == NOT_ASSIGNED) //it follows that rightConstant == NOT_ASSIGNED
                 {
                     int64_t leftGroup = leftAssignment[leftTerm.getId()];
                     int64_t rightGroup = rightAssignment[rightTerm.getId()];
@@ -360,7 +373,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     }
 
     std::vector<unsigned> satisfied;
-    satisfied.resize(ruleFrom.getHeads().size());
+    satisfied.resize(ruleFrom.getHeads().size(), 0);
 
     //TODO: Maybe do a quick check whether or not this can fire, for example if the head contains a predicate which is not in I_a
     bool fromRuleSatisfied = false;
@@ -373,7 +386,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     }
 
     satisfied.clear();
-    satisfied.resize(ruleTo.getBody().size());
+    satisfied.resize(ruleTo.getBody().size(), 0);
 
     //TODO: If phi_2 contains nulls then this check can be skipped (because there are no nulls in phi_1 and no nulls in phi_{22} -> see check in the beginning for that)
     bool toBodySatisfied = false;
@@ -386,7 +399,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     }
 
     satisfied.clear();
-    satisfied.resize(ruleTo.getHeads().size());
+    satisfied.resize(ruleTo.getHeads().size(), 0);
 
     bool toRuleSatisfied = false;
     toRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, false);
@@ -462,7 +475,6 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
 
     for (const Rule &currentRule : rules)
     {
-        //TODO: Good place to handle negation as well maybe
         Rule markedRule = markExistentialVariables(currentRule);
         markedRules.push_back(markedRule);
     }

@@ -3,6 +3,8 @@
 #include <vector>
 #include <utility>
 #include <list>
+#include <unordered_map>
+#include <unordered_set>
 
 struct VariableAssignments
 {
@@ -479,20 +481,55 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
         markedRules.push_back(markedRule);
     }
 
-    for (unsigned ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
-    {
-        for (unsigned ruleTo : IDBRuleIndices)
-        {
-            if (ruleFrom == ruleTo)
-                continue;
+    std::unordered_map<PredId_t, std::vector<size_t>> headFromMap, bodyToMap;
+    std::unordered_set<PredId_t> allPredicates;
 
-            unsigned variableCountFrom = variableCounts[ruleFrom];
-            unsigned variableCountTo = variableCounts[ruleTo];
-            
-            if (positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
+    for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+    {
+        const Rule &markedRule = markedRules[ruleIndex];
+
+        for (const Literal &currentLiteral : markedRule.getHeads())
+        {
+            PredId_t currentPredId = currentLiteral.getPredicate().getId();
+
+            headFromMap[currentPredId].push_back(ruleIndex);
+            allPredicates.insert(currentPredId);
+        }
+
+        for (const Literal &currentLiteral : markedRule.getBody())
+        {
+            PredId_t currentPredId = currentLiteral.getPredicate().getId();
+
+            bodyToMap[currentPredId].push_back(ruleIndex);
+            allPredicates.insert(currentPredId);
+        }
+    }
+
+    std::unordered_set<uint64_t> proccesedPairs;
+    for (PredId_t currentPredicate : allPredicates)
+    {
+        auto fromIterator = headFromMap.find(currentPredicate);
+        auto toIterator = bodyToMap.find(currentPredicate);
+
+        if (fromIterator == headFromMap.end() || toIterator == bodyToMap.end())
+            continue;
+
+        for (size_t ruleFrom : fromIterator->second)
+        {
+            for (size_t ruleTo : toIterator->second)
             {
-                result.addEdge(ruleFrom, ruleTo);
-                resultTransposed.addEdge(ruleTo, ruleFrom);
+                uint64_t hash = ruleFrom * rules.size() + ruleTo;
+                if (proccesedPairs.find(hash) != proccesedPairs.end())
+                    continue;
+
+                unsigned variableCountFrom = variableCounts[ruleFrom];
+                unsigned variableCountTo = variableCounts[ruleTo];
+                
+                if (positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
+                {
+                    result.addEdge(ruleFrom, ruleTo);
+                    resultTransposed.addEdge(ruleTo, ruleFrom);
+                }
             }
         }
     }

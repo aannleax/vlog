@@ -904,8 +904,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
                 if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
-                    if (isBlocked)
-                        std::cout << "blocked" << '\n';
+                    // if (isBlocked)
+                    //     std::cout << "blocked" << '\n';
 
                     newDerivations = executeGroup(currentGroup->rules, costRules, !isBlocked, timeout);
                     // newDerivations = executeGroupInOrder(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);

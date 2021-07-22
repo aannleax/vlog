@@ -4,6 +4,8 @@
 #include <utility>
 #include <list>
 #include <cstdlib>
+#include <unordered_map>
+#include <unordered_set>
 
 struct RestrainPiece
 {
@@ -494,7 +496,7 @@ std::pair<RelianceGraph, RelianceGraph> computeRestrainReliances(std::vector<Rul
     std::vector<unsigned> variableCounts;
     variableCounts.reserve(rules.size());
 
-    for (unsigned ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+    for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
     {
         const Rule &currentRule = rules[ruleIndex];
 
@@ -504,36 +506,67 @@ std::pair<RelianceGraph, RelianceGraph> computeRestrainReliances(std::vector<Rul
 
     for (const Rule &currentRule : rules)
     {
-        if (currentRule.getId() == 10)
-            int x = 0;
-
         markedRules.push_back(markExistentialVariablesAndPieces(currentRule));
     }
 
-    for (unsigned ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
-    {
-        for (unsigned ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+    std::unordered_map<PredId_t, std::vector<size_t>> headFromMap, headToMap;
+
+    for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+    {   
+        const Rule &markedRule = markedRules[ruleIndex].singleRule;
+
+        for (const Literal &currentLiteral : markedRule.getHeads())
         {
-            if (ruleFrom == ruleTo)
-                continue;
-
-            unsigned variableCountFrom = variableCounts[ruleFrom];
-            unsigned variableCountTo = variableCounts[ruleTo];
-
-            if (ruleTo == 10 && ruleFrom == 42)
-                int x = 0;
-
-            for (unsigned pieceIndex = 0; pieceIndex < markedRules[ruleTo].headPieces.size(); ++pieceIndex)
+            bool containsExistentialVariable = false;
+            for (size_t termIndex = 0; termIndex < currentLiteral.getTupleSize(); ++termIndex)
             {
-                if (restrainReliance(markedRules[ruleFrom].singleRule, variableCountFrom, markedRules[ruleTo].singleRule, markedRules[ruleTo].headPieces[pieceIndex], variableCountTo))
+                VTerm currentTerm = currentLiteral.getTermAtPos(termIndex);
+
+                if ((int32_t)currentTerm.getId() < 0)
                 {
-                    result.addEdge(ruleFrom, ruleTo);
-                    resultTransposed.addEdge(ruleTo, ruleFrom);
-                
+                    containsExistentialVariable = true;
                     break;
                 }
             }
-           
+
+            headFromMap[currentLiteral.getPredicate().getId()].push_back(ruleIndex);
+
+            std::vector<size_t> &headToVector = headToMap[currentLiteral.getPredicate().getId()];
+            if (containsExistentialVariable)
+                headToVector.push_back(ruleIndex);
+        }
+    }
+
+    std::unordered_set<uint64_t> proccesedPairs;
+    for (auto iteratorFrom : headFromMap)
+    {
+        auto iteratorTo = headToMap.find(iteratorFrom.first);
+        
+        if (iteratorTo == headToMap.end())
+            continue;
+
+        for (size_t ruleFrom : iteratorFrom.second)
+        {
+            for (size_t ruleTo : iteratorTo->second)
+            {
+                uint64_t hash = ruleFrom * rules.size() + ruleTo;
+                if (proccesedPairs.find(hash) != proccesedPairs.end())
+                    continue;
+
+                unsigned variableCountFrom = variableCounts[ruleFrom];
+                unsigned variableCountTo = variableCounts[ruleTo];
+
+                for (unsigned pieceIndex = 0; pieceIndex < markedRules[ruleTo].headPieces.size(); ++pieceIndex)
+                {
+                    if (restrainReliance(markedRules[ruleFrom].singleRule, variableCountFrom, markedRules[ruleTo].singleRule, markedRules[ruleTo].headPieces[pieceIndex], variableCountTo))
+                    {
+                        result.addEdge(ruleFrom, ruleTo);
+                        resultTransposed.addEdge(ruleTo, ruleFrom);
+                    
+                        break;
+                    }
+                }
+            }
         }
     }
 

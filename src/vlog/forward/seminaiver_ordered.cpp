@@ -15,7 +15,7 @@ SemiNaiverOrdered::SemiNaiverOrdered(EDBLayer &layer,
         program, opt_intersect, opt_filtering, multithreaded, chase,
         nthreads, shuffleRules, ignoreExistentialRule, RMFC_check)
 {
-    std::cout << "Running constructor of SemiNaiverOrdered" << std::endl;
+    std::cout << "Running constructor of SemiNaiverOrdered" << '\n';
 }
 
 void SemiNaiverOrdered::fillOrder(const RelianceGraph &graph, unsigned node, 
@@ -263,7 +263,7 @@ void SemiNaiverOrdered::orderGroupPredicateCount(PositiveGroup *group)
     {
         std::cout << group->rules[index].rule.getId() << "(" << index << ") ";
     }
-    std::cout << std::endl;
+    std::cout << '\n';
 }
 
 
@@ -390,10 +390,10 @@ bool SemiNaiverOrdered::executeGroupAverageRuntime(
     
         double currentEffectiveness = currentDetails.cardinalitySum / currentDetails.executionTime;
 
-        std::cout << currentEffectiveness << ", " << currentDetails.executionTime << ": " << currentDetails.rule.tostring(program, &layer) << std::endl;
+        std::cout << currentEffectiveness << ", " << currentDetails.executionTime << ": " << currentDetails.rule.tostring(program, &layer) << '\n';
     }
 
-    std::cout << "False Execution time: " << falseExecutionTimeSum << std::endl;
+    std::cout << "False Execution time: " << falseExecutionTimeSum << '\n';
 
     return result;
 }
@@ -636,10 +636,10 @@ bool SemiNaiverOrdered::executeGroup(
     
     //     double currentEffectiveness = currentDetails.cardinalitySum / currentDetails.executionTime;
 
-    //     std::cout << currentEffectiveness << ", " << currentDetails.executionTime << ": " << currentDetails.rule.tostring(program, &layer) << std::endl;
+    //     std::cout << currentEffectiveness << ", " << currentDetails.executionTime << ": " << currentDetails.rule.tostring(program, &layer) << '\n';
     // }
 
-    // std::cout << "False Execution time: " << falseExecutionTimeSum << std::endl;
+    // std::cout << "False Execution time: " << falseExecutionTimeSum << '\n';
 
     return result;
 }
@@ -777,30 +777,30 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     this->iteration = iteration;
 
     std::vector<Rule> &allRules = program->getAllRules();
-    std::cout << "#Rules: " << allRules.size() << std::endl;
+    std::cout << "#Rules: " << allRules.size() << '\n';
 
     std::chrono::system_clock::time_point relianceStart = std::chrono::system_clock::now();
-    std::cout << "Computing positive reliances..." << std::endl;
+    std::cout << "Computing positive reliances..." << '\n';
     std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(allRules);
     // std::pair<RelianceGraph, RelianceGraph> relianceGraphs = DEBUGEveryIDBInOneGroup(allRules);
 
-    /*std::cout << "Positive reliances: " << std::endl;
+    /*std::cout << "Positive reliances: " << '\n';
     for (unsigned from = 0; from < relianceGraphs.first.edges.size(); ++from)
     {
         for (unsigned to :  relianceGraphs.first.edges[from])
         {
-            std::cout << "positive reliance: " << from << " -> " << to << std::endl;
+            std::cout << "positive reliance: " << from << " -> " << to << '\n';
         }
     }*/
 
     // unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, relianceGraphs.first);
-    // std::cout << "There are " << fakeReliances << " fake reliances." << std::endl;
+    // std::cout << "There are " << fakeReliances << " fake reliances." << '\n';
 
     // relianceGraphs.first.saveCSV("graph.csv");
 
-    std::cout << "Computing positive reliance groups..." << std::endl;
+    std::cout << "Computing positive reliance groups..." << '\n';
     RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);    
-    std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << std::endl;
+    std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
 
     /*for (vector<unsigned> &group : relianceGroups.groups)
     {
@@ -809,20 +809,21 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
         for (unsigned member : group)
         {
-            std::cout << allRules[member].tostring(program, &layer) << std::endl;
+            std::cout << allRules[member].tostring(program, &layer) << '\n';
         }
-        std::cout << "------------------------" << std::endl;
+        std::cout << "------------------------" << '\n';
     }
 
-    std::cout << "Found " << relianceGroups.groups.size() << " groups." << std::endl;*/
+    std::cout << "Found " << relianceGroups.groups.size() << " groups." << '\n';*/
 
     std::vector<StatIteration> costRules;
 
     //std::pair<RelianceGraph, RelianceGraph> blockingGraphs = std::make_pair(RelianceGraph(allRules.size()), RelianceGraph(allRules.size()));
-    std::cout << "Computing blocking reliances..." << std::endl;
+    std::cout << "Computing blocking reliances..." << '\n';
+    relianceStart = std::chrono::system_clock::now();
     std::pair<RelianceGraph, RelianceGraph> blockingGraphs = computeRestrainReliances(allRules);
     // std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
-    std::cout << "Blocking computation took " << "some time" << std::endl;
+    std::cout << "Blocking computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
 
     blockingGraphs.first.saveCSV("blocking.csv");
 
@@ -838,7 +839,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     //         std::cout << '\t' << allRules[blockingNode].tostring(program, &layer) << '\n';
     //     }
     // }
-    // std::cout << std::endl;
+    // std::cout << '\n';
 
 #if RUNMAT
     std::vector<PositiveGroup> positiveGroups;
@@ -899,10 +900,13 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                 }
 
                 //if (currentGroup == firstBlockedGroup)
-                    //std::cout << "Queue is has no unblocked triggered members" << std::endl;
+                    //std::cout << "Queue is has no unblocked triggered members" << '\n';
 
                 if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
+                    if (isBlocked)
+                        std::cout << "blocked" << '\n';
+
                     newDerivations = executeGroup(currentGroup->rules, costRules, !isBlocked, timeout);
                     // newDerivations = executeGroupInOrder(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);
                     // newDerivations = executeGroupBottomUp(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);
@@ -950,7 +954,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     }
 #endif
 
-    std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << std::endl;
+    std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << '\n';
 
     this->running = false;
 }

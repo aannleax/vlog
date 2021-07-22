@@ -272,16 +272,16 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
         notMappedPieceLiterals.push_back(ruleToPiece[headIndex]);
     }
 
-    if (!checkUnmappedExistentialVariables(notMappedPieceLiterals, assignments.to, assignments.groups))
-    {
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
-    }
+    // if (!checkUnmappedExistentialVariables(notMappedPieceLiterals, assignments.to, assignments.groups))
+    // {
+    //     return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
+    // }
 
     std::vector<unsigned> satisfied;
     satisfied.resize(ruleTo.getHeads().size());
 
     bool toHeadSatisfied = false;
-    toHeadSatisfied |= positiveModels(ruleTo.getBody(), assignments.to, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, true);
+    // toHeadSatisfied |= positiveModels(ruleTo.getBody(), assignments.to, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, true);
     
     if (toHeadSatisfied)
         return false;
@@ -302,10 +302,10 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     satisfied.resize(ruleFrom.getHeads().size(), 0);
 
     bool fromHeadSatisfied = false;
-    fromHeadSatisfied |= positiveModels(ruleTo.getBody(), assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
-    fromHeadSatisfied |= positiveModels(ruleTo.getHeads(), assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
-    fromHeadSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, true);
-    fromHeadSatisfied |= positiveModels(notMappedPieceLiterals, assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
+    // fromHeadSatisfied |= positiveModels(ruleTo.getBody(), assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
+    // fromHeadSatisfied |= positiveModels(ruleTo.getHeads(), assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
+    // fromHeadSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, true);
+    // fromHeadSatisfied |= positiveModels(notMappedPieceLiterals, assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
 
     if (fromHeadSatisfied)
         return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
@@ -331,7 +331,7 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
         {
             if (fromConstant != toConstant)
             {
-                std::cout << "return false (1)" << std::endl;
+                // std::cout << "return false (1)" << '\n';
                 return false;
             }
             else
@@ -374,7 +374,10 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
                 // Since at least one of the variables is universal 
                 // and we cannot assign a universal variable to a null we have to reject this case
                 if (newValue < 0)
+                {
+                    // std::cout << "return false (2b)" << '\n';
                     return false;
+                }
 
                 // We merge fromGroup and toGroup by assigning each member of toGroup to fromGroup
                 // and setting the value of fromGroup to the value to newValue
@@ -392,7 +395,7 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
                 
                 if (groupConstant == 0)
                 {
-                    std::cout << "return false (2c)" << std::endl;
+                    // std::cout << "return false (2c)" << '\n';
                     return false;
                 }
 
@@ -417,7 +420,7 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
                 // We cannot assign a null to a universal variable
                 if (variableId > 0 && constant < 0)
                 {
-                    std::cout << "return false (3a)" << std::endl;
+                    // std::cout << "return false (3a)" << '\n';
                     return false;
                 }
 
@@ -429,7 +432,7 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
                 // a group without a value means that it must contain universal variables which cannot be assigned to nulls
                 if (constant < 0)
                 {
-                    std::cout << "return false (3b)" << std::endl;
+                    // std::cout << "return false (3b)" << '\n';
                     return false;
                 }
 

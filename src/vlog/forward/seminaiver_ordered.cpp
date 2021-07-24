@@ -796,7 +796,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     // unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, relianceGraphs.first);
     // std::cout << "There are " << fakeReliances << " fake reliances." << '\n';
 
-    // relianceGraphs.first.saveCSV("graph.csv");
+    // relianceGraphs.first.saveCSV("graph_new.csv");
 
     std::cout << "Computing positive reliance groups..." << '\n';
     RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);    

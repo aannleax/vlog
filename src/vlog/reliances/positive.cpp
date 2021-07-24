@@ -6,27 +6,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-struct VariableAssignments
-{
-    VariableAssignments(unsigned variableCountFrom, unsigned variableCountTo)
-    {
-        from.resize(variableCountFrom, NOT_ASSIGNED);
-        to.resize(variableCountTo, NOT_ASSIGNED);
-    }
-
-    struct Group
-    {
-        Group() {}
-        Group(int64_t value) {this->value = value;}
-
-        int64_t value = NOT_ASSIGNED;
-        //TODO: Maybe should include members, so that groups can be changed more easily 
-    };
-
-    std::vector<Group> groups;
-    std::vector<int64_t> from, to;
-};
-
 Rule markExistentialVariables(const Rule &rule)
 {
     uint32_t ruleId = rule.getId();
@@ -104,116 +83,43 @@ int64_t positiveGetAssignedConstant(VTerm term,
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
     VariableAssignments &assignments)
 {
-    unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
+      unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
 
     for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
     {
         VTerm fromTerm = literalFrom.getTermAtPos(termIndex);
         VTerm toTerm = literalTo.getTermAtPos(termIndex);
+    
+        TermInfo fromInfo = getTermInfo(fromTerm, assignments, RelianceRuleRelation::From);
+        TermInfo toInfo = getTermInfo(toTerm, assignments, RelianceRuleRelation::To);
 
-        int64_t fromConstant = positiveGetAssignedConstant(fromTerm, assignments.from, assignments.groups);
-        int64_t toConstant = positiveGetAssignedConstant(toTerm, assignments.to, assignments.groups);
+        RelianceTermCompatible compatibleInfo;
+        bool compatibleResult = termsEqual(fromInfo, toInfo, assignments, &compatibleInfo);
 
-        // Case 1: Both terms are either constants/nulls or variables assigned to a group which is mapped to a constant/null
-        if (fromConstant != NOT_ASSIGNED && toConstant != NOT_ASSIGNED)
+        if (compatibleResult)
         {
-            if (fromConstant != toConstant)
+            continue;
+        }
+        else
+        {
+            if (compatibleInfo.type == RelianceTermCompatible::Types::Incompatible)
             {
                 return false;
             }
             else
             {
-                continue;
-            }
-        }
-        // Case 2: Both terms are variables where at least one of them is not in a group or in a group with not constant/null assigned
-        else if ((int32_t)fromTerm.getId() > 0 && (int32_t)toTerm.getId() > 0)
-        {
-            int64_t &fromGroupId = assignments.from[fromTerm.getId()];
-            int64_t &toGroupId = assignments.to[toTerm.getId()];
-        
-            // Case 2a: Both terms are variables not assigned to a group
-            // We therefore need to create a new group and assign both variables to the new group
-            if (fromGroupId == NOT_ASSIGNED && toGroupId == NOT_ASSIGNED)
-            {
-                int64_t newGroupId = (int64_t)assignments.groups.size();
-                assignments.groups.emplace_back();
-
-                fromGroupId = newGroupId;
-                toGroupId = newGroupId;
-            }
-            // Case 2b: Both terms are variabels which have been assigned to a group
-            // Note: Because case 1 is already handled there is at least one group with no assigned constant/null
-            else if (fromGroupId != NOT_ASSIGNED && toGroupId != NOT_ASSIGNED)
-            {
-                // If both terms are in the same group then everything is fine
-                if (fromGroupId == toGroupId)
+                // We may not assign a universal variable of fromRule to a null
+                if (fromInfo.type == TermInfo::Types::Universal && compatibleInfo.constant < 0)
                 {
-                    continue;
+                    return false;
                 }
 
-                int64_t fromValue = assignments.groups[fromGroupId].value;
-                int64_t toValue = assignments.groups[toGroupId].value;
-                
-                // If there is a group with an assigned value then newValue will equal that group's value (or NOT_ASSIGNED otherwise)
-                int64_t newValue = (fromValue == NOT_ASSIGNED) ? toValue : fromValue;
-
-                // Since nulls can only be assigned to variables in the body of toRule this must mean 
-                // that we are about to assign a (universal) variable in the head of fromRule to a null which is invalid
-                if (newValue < 0) 
-                    return false;
-
-                // We merge fromGroup and toGroup by assigning each member of toGroup to fromGroup
-                // and setting the value of fromGroup to the value to newValue
-                assignments.groups[fromGroupId].value = newValue;
-                positiveChangeGroup(assignments.to, toGroupId, fromGroupId);
-            }
-            // Case 2c: Both terms are variables where one belongs to a group and the other one doesn't
-            // Here we need to add the variable without a group to the group of the variable which is already in a group
-            else
-            {
-                int64_t groupId = (fromGroupId == NOT_ASSIGNED) ? toGroupId : fromGroupId;
-                int64_t &noGroupId = (fromGroupId == NOT_ASSIGNED) ? fromGroupId : toGroupId;
-                VariableAssignments::Group &group = assignments.groups[groupId];
-                int64_t groupConstant = group.value;
-
-                // We cannot assign a universal variable from the FromRule into a group which is mapped to a null
-                if (groupConstant < 0) // && fromGroupId == NOT_ASSIGNED since a variable in the head of fromRule couldn't have been assigned a null 
-                    return false;
-
-                noGroupId = groupId;
+                makeCompatible(compatibleInfo, assignments.from, assignments.to, assignments.groups);
             }
         }
-        // Case 3: One term is a variable with no group or a group with no value, the other term is a constant/null
-        else 
-        {
-            int64_t variableId = ((int32_t)fromTerm.getId() > 0) ? fromTerm.getId() : toTerm.getId();
-
-            std::vector<int64_t> &assignmentVector = ((int32_t)fromTerm.getId() > 0) ? assignments.from : assignments.to;
-            int64_t &groupId = assignmentVector[variableId];
-            int64_t constant = ((int32_t)fromTerm.getId() > 0) ? toConstant : fromConstant;
-
-            // If the variable does not belong to a group then create a new group with the value of the constant/null
-            if (groupId == NOT_ASSIGNED)
-            {
-                int64_t newGroupId = (int64_t)assignments.groups.size();
-                assignments.groups.emplace_back(constant);
-               
-                groupId = newGroupId;
-            }
-            // If the variable belongs to group then set the group value to the constant
-            else 
-            {
-                // A group always consits of at least one universal variable from fromRule which cannot be assigned a null
-                if (constant < 0)
-                    return false;
-                
-                assignments.groups[groupId].value = constant;
-            }
-        }   
     }
 
-    return true;   
+    return true;
 }
 
 bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
@@ -518,6 +424,9 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
         {
             for (size_t ruleTo : toIterator->second)
             {
+                if (ruleFrom == 11 && ruleTo == 1039)
+                    int x = 0;
+
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;

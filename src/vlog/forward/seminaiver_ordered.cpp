@@ -825,7 +825,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     // std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
     std::cout << "Blocking computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
 
-    blockingGraphs.first.saveCSV("blocking.csv");
+    blockingGraphs.first.saveCSV("blocking_new.csv");
 
     // for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
     // {

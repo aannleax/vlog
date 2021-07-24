@@ -324,121 +324,33 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
     {
         VTerm fromTerm = literalFrom.getTermAtPos(termIndex);
         VTerm toTerm = literalTo.getTermAtPos(termIndex);
-
-        int64_t fromConstant = positiveGetAssignedConstant(fromTerm, assignments.from, assignments.groups); // Here existential variables are treated like constants
-        int64_t toConstant = restrainGetAssignedConstant(toTerm, assignments.to, assignments.groups); // Here existential variables are treated like variables
     
-        // Case 1: Both terms are either constants/nulls or variables assigned to a group which is mapped to a constant/null
-        if (fromConstant != NOT_ASSIGNED && toConstant != NOT_ASSIGNED)
+        TermInfo fromInfo = getTermInfo(fromTerm, assignments, RelianceRuleRelation::From);
+        TermInfo toInfo = getTermInfo(toTerm, assignments, RelianceRuleRelation::To);
+
+        RelianceTermCompatible compatibleInfo;
+        bool compatibleResult = termsEqual(fromInfo, toInfo, assignments, &compatibleInfo);
+
+        if (compatibleResult)
         {
-            if (fromConstant != toConstant)
+            continue;
+        }
+        else
+        {
+            if (compatibleInfo.type == RelianceTermCompatible::Types::Incompatible)
             {
-                // std::cout << "return false (1)" << '\n';
                 return false;
             }
             else
             {
-                continue;
-            }
-        }
-        // Case 2: Both terms are variables where at least one of them is not in a group or in a group with not constant/null assigned
-        else if ((int32_t)fromTerm.getId() > 0 && (int32_t)toTerm.getId() != 0)
-        {
-            int64_t &fromGroupId = assignments.from[fromTerm.getId()];
-            int64_t &toGroupId = assignments.to[std::abs((int32_t)toTerm.getId())];
-        
-            // Case 2a: Both terms are variables not assigned to a group
-            // We therefore need to create a new group and assign both variables to the new group
-            if (fromGroupId == NOT_ASSIGNED && toGroupId == NOT_ASSIGNED)
-            {
-                int64_t newGroupId = (int64_t)assignments.groups.size();
-                assignments.groups.emplace_back();
-
-                fromGroupId = newGroupId;
-                toGroupId = newGroupId;
-            }
-            // Case 2b: Both terms are variabels which have been assigned to a group
-            // Note: Because case 1 is already handled there is at least one group with no assigned constant/null
-            else if (fromGroupId != NOT_ASSIGNED && toGroupId != NOT_ASSIGNED)
-            {
-                // If both terms are in the same group then everything is fine
-                if (fromGroupId == toGroupId)
+                // We may not assign a universal variable to a null
+                if ((toInfo.type == TermInfo::Types::Universal || fromInfo.type == TermInfo::Types::Universal) 
+                    && compatibleInfo.constant < 0)
                 {
-                    continue;
-                }
-
-                int64_t fromValue = assignments.groups[fromGroupId].value;
-                int64_t toValue = assignments.groups[toGroupId].value;
-                
-                // If there is a group with an assigned value then newValue will equal that group's value (or NOT_ASSIGNED otherwise)
-                int64_t newValue = (fromValue == NOT_ASSIGNED) ? toValue : fromValue;
-
-                // Since at least one of the variables is universal 
-                // and we cannot assign a universal variable to a null we have to reject this case
-                if (newValue < 0)
-                {
-                    // std::cout << "return false (2b)" << '\n';
                     return false;
                 }
 
-                // We merge fromGroup and toGroup by assigning each member of toGroup to fromGroup
-                // and setting the value of fromGroup to the value to newValue
-                assignments.groups[fromGroupId].value = newValue;
-                positiveChangeGroup(assignments.to, toGroupId, fromGroupId);
-            }
-            // Case 2c: Both terms are variables where one belongs to a group and the other one doesn't
-            // Here we need to add the variable without a group to the group of the variable which is already in a group
-            else
-            {
-                int64_t groupId = (fromGroupId == NOT_ASSIGNED) ? toGroupId : fromGroupId;
-                int64_t &noGroupId = (fromGroupId == NOT_ASSIGNED) ? fromGroupId : toGroupId;
-                VariableAssignments::Group &group = assignments.groups[groupId];
-                int64_t groupConstant = group.value;
-                
-                if (groupConstant == 0)
-                {
-                    // std::cout << "return false (2c)" << '\n';
-                    return false;
-                }
-
-                noGroupId = groupId;
-            }
-        }
-        // Case 3: One term is a variable with no group or a group with no value, the other term is a constant/null
-        else 
-        {
-            int64_t variableId = ((int32_t)fromTerm.getId() > 0) ? (int32_t)fromTerm.getId() : (int32_t)toTerm.getId();
-
-            std::vector<int64_t> &assignmentVector = ((int32_t)fromTerm.getId() > 0) ? assignments.from : assignments.to;
-            int64_t &groupId = assignmentVector[std::abs(variableId)];
-            int64_t constant = ((int32_t)fromTerm.getId() > 0) ? toConstant : fromConstant;
-        
-            // If the variable does not belong to a group then create a new group with the value of the constant/null
-            if (groupId == NOT_ASSIGNED)
-            {
-                int64_t newGroupId = (int64_t)assignments.groups.size();
-                assignments.groups.emplace_back(constant);
-
-                // We cannot assign a null to a universal variable
-                if (variableId > 0 && constant < 0)
-                {
-                    // std::cout << "return false (3a)" << '\n';
-                    return false;
-                }
-
-                groupId = newGroupId;
-            }
-            // If the variable belongs to group then set the group value to the constant
-            else 
-            {
-                // a group without a value means that it must contain universal variables which cannot be assigned to nulls
-                if (constant < 0)
-                {
-                    // std::cout << "return false (3b)" << '\n';
-                    return false;
-                }
-
-                assignments.groups[groupId].value = constant;
+                makeCompatible(compatibleInfo, assignments.from, assignments.to, assignments.groups);
             }
         }
     }

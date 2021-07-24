@@ -83,7 +83,7 @@ int64_t positiveGetAssignedConstant(VTerm term,
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
     VariableAssignments &assignments)
 {
-      unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
+    unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
 
     for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
     {

@@ -6,6 +6,26 @@
 #include <unordered_map>
 #include <unordered_set>
 
+unsigned highestLiteralsId(const std::vector<Literal> &literalVector)
+{
+    unsigned result = 0;
+
+    for (const Literal &literal: literalVector)
+    {
+        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+        {
+            VTerm currentTerm = literal.getTermAtPos(termIndex);
+        
+            if (currentTerm.getId() > result)
+            {
+                result = currentTerm.getId();
+            }
+        }
+    }
+    
+    return result;
+}
+
 TermInfo getTermInfo(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation)
 {
     TermInfo result;
@@ -37,8 +57,53 @@ TermInfo getTermInfo(VTerm term, const VariableAssignments &assignments, Relianc
     return result;
 }
 
-bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight, const VariableAssignments &assignments,
-    RelianceTermCompatible *compatible)
+TermInfo getTermInfoModels(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation,
+    bool treatExistentialAsPlaceholder)
+{
+    TermInfo result;
+    result.relation = relation;
+    result.termId = (int32_t)term.getId();
+
+    if (term.getId() == 0)
+    {
+        result.type = TermInfo::Types::Constant;
+        result.constant = (int64_t)term.getValue();
+    }
+    else if ((int32_t)term.getId() > 0)
+    {
+        result.type = TermInfo::Types::Universal;
+        result.groupId = assignments.getGroupId(term.getId(), relation);
+            
+        if (result.groupId != NOT_ASSIGNED)
+            result.constant = assignments.groups[result.groupId].value;
+    }
+    else
+    {
+        if (treatExistentialAsPlaceholder)
+        {
+            result.type = TermInfo::Types::Existential;
+        }
+        else
+        {
+            result.groupId = assignments.getGroupId(term.getId(), relation);
+
+            if (result.groupId == NOT_ASSIGNED)
+            {
+                result.type = TermInfo::Types::Constant;
+                result.constant = (int32_t)term.getId();
+            }
+            else
+            {
+                result.type = TermInfo::Types::Existential;
+                result.constant = assignments.groups[result.groupId].value;
+            }
+        }
+    }
+
+    return result;
+}
+
+bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight, RelianceTermCompatible *compatible)
 {
     if (termLeft.constant != NOT_ASSIGNED && termRight.constant != NOT_ASSIGNED)
     {
@@ -168,4 +233,159 @@ void makeCompatible(const RelianceTermCompatible &compatibleInfo,
             relianceMergeGroup(assignmentLeft, compatibleInfo.mergeGroups.groupLeftId, compatibleInfo.mergeGroups.groupRightId);
         } break;
     }
+}
+
+bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftRelation,
+    const std::vector<Literal> &right, RelianceRuleRelation rightRelation,
+    const VariableAssignments &assignments,
+    std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings
+)
+{
+    bool isCompletelySatisfied = true;
+    
+    size_t existentialMappingIndex = 0;
+
+    for (unsigned rightIndex = 0; rightIndex < right.size(); ++rightIndex)
+    {   
+        if (satisfied[rightIndex] == 1)
+            continue;
+
+        const Literal &rightLiteral = right[rightIndex];
+        std::unordered_map<int64_t, TermInfo> *currentMapping = nullptr;
+
+        bool rightSatisfied = false;
+        for (const Literal &leftLiteral : left)
+        {
+            if (rightLiteral.getPredicate().getId() != leftLiteral.getPredicate().getId())
+                continue;
+
+            bool leftModelsRight = true;
+            unsigned tupleSize = leftLiteral.getTupleSize(); //Should be the same as rightLiteral.getTupleSize()
+
+            for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
+            {
+                VTerm leftTerm = leftLiteral.getTermAtPos(termIndex);
+                VTerm rightTerm = rightLiteral.getTermAtPos(termIndex);
+
+                TermInfo leftInfo = getTermInfoModels(leftTerm, assignments, leftRelation, false);
+                TermInfo rightInfo = getTermInfoModels(rightTerm, assignments, rightRelation, true); //TODO: Rethink order of for loops in order to save this computation
+
+                if (rightInfo.type == TermInfo::Types::Existential)
+                {
+                    if (currentMapping == nullptr)
+                    {
+                        if (existentialMappingIndex >= existentialMappings.size())
+                        {
+                            existentialMappings.emplace_back();
+                        }
+
+                        std::vector<std::unordered_map<int64_t, TermInfo>> &currentMappingVector = existentialMappings[existentialMappingIndex];
+                        ++existentialMappingIndex;
+
+                        currentMappingVector.emplace_back();
+                        currentMapping = &currentMappingVector.back();
+                    }
+
+                    auto mapIterator = currentMapping->find(rightInfo.termId);
+                    if (mapIterator == currentMapping->end())
+                    {
+                        (*currentMapping)[rightInfo.termId] = leftInfo;
+                    }
+                    else
+                    {
+                        if (termsEqual(mapIterator->second, leftInfo))
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            leftModelsRight = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (termsEqual(leftInfo, rightInfo))
+                {
+                    continue;
+                }
+                else
+                {
+                    leftModelsRight = false;
+                    break;
+                }
+            }
+
+            if (leftModelsRight)
+            {
+                rightSatisfied = true;
+                break;
+            }
+        }
+
+        if (rightSatisfied)
+        {
+            satisfied[rightIndex] = 1;
+        }
+        else
+        {
+            isCompletelySatisfied = false;
+        }
+    }
+
+    return isCompletelySatisfied;
+}
+
+bool isMappingConsistent(std::unordered_map<int64_t, TermInfo> &mapping, 
+    const std::unordered_map<int64_t, TermInfo> &compare)
+{
+    for (auto compareIterator : compare)
+    {
+        auto mappingIterator = mapping.find(compareIterator.first);
+        if (mappingIterator == mapping.end())
+        {
+            mapping[compareIterator.first] = compareIterator.second;
+        }
+        else
+        {
+            if (!termsEqual(mappingIterator->second, compareIterator.second))
+                return false;
+        }
+    }
+
+    return true;
+}
+
+bool checkConsistentExistentialDeep(const std::unordered_map<int64_t, TermInfo> &currentMapping, 
+    const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings,
+    size_t nextIndex)
+{
+    if (nextIndex >= mappings.size())
+        return true;
+
+    for (const std::unordered_map<int64_t, TermInfo> &nextMap : mappings[nextIndex])
+    {
+        std::unordered_map<int64_t, TermInfo> updatedMap = currentMapping;
+        if (isMappingConsistent(updatedMap, nextMap))
+        {
+            if (checkConsistentExistentialDeep(updatedMap, mappings, nextIndex + 1))
+                return true;
+        }
+    }
+
+    return false;
+}
+
+bool checkConsistentExistential(const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings)
+{
+    if (mappings.size() <= 1)
+        return true;
+
+    for (const std::unordered_map<int64_t, TermInfo> &startMap : mappings[0])
+    {
+        if (checkConsistentExistentialDeep(startMap, mappings, 1))
+            return true;
+    }
+
+    return false;
 }

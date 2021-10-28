@@ -143,9 +143,13 @@ struct TermInfo
 
 // Common
 TermInfo getTermInfo(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation);
-bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight, const VariableAssignments &assignments, RelianceTermCompatible *compatible = nullptr);
+bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight, RelianceTermCompatible *compatible = nullptr);
 void makeCompatible(const RelianceTermCompatible &compatibleInfo, std::vector<int64_t> &assignmentLeft, std::vector<int64_t> &assignmentRight, std::vector<VariableAssignments::Group> &groups);
+unsigned highestLiteralsId(const std::vector<Literal> &literalVector);
+bool checkConsistentExistential(const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings);
+bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings);
 
+// For outside
 std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rule> &rules);
 std::pair<RelianceGraph, RelianceGraph> computeRestrainReliances(std::vector<Rule> &rules);
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const RelianceGraph &positiveGraph);

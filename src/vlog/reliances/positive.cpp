@@ -35,51 +35,6 @@ Rule markExistentialVariables(const Rule &rule)
     return Rule(ruleId, heads, body);
 }
 
-unsigned highestLiteralsId(const std::vector<Literal> &literalVector)
-{
-    unsigned result = 0;
-
-    for (const Literal &literal: literalVector)
-    {
-        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
-        {
-            VTerm currentTerm = literal.getTermAtPos(termIndex);
-        
-            if (currentTerm.getId() > result)
-            {
-                result = currentTerm.getId();
-            }
-        }
-    }
-    
-    return result;
-}
-
-void positiveChangeGroup(std::vector<int64_t> &assignments, int64_t originalGroup, int64_t newGroup)
-{
-    for (int64_t &currentGroup : assignments)
-    {
-        if (currentGroup == originalGroup)
-        {
-            currentGroup = newGroup;
-        }
-    }
-}
-
-int64_t positiveGetAssignedConstant(VTerm term, 
-    const std::vector<int64_t> &assignment, const std::vector<VariableAssignments::Group> &groups)
-{
-    if (term.getId() == 0) // constant
-        return term.getValue();
-    else if ((int32_t)term.getId() < 0) // existential variable (=null)
-        return (int32_t)term.getId();
-    else // universal variable
-      if (assignment[term.getId()] == NOT_ASSIGNED)
-         return NOT_ASSIGNED;
-      else
-        return groups[assignment[term.getId()]].value;
-}
-
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
     VariableAssignments &assignments)
 {
@@ -94,7 +49,7 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
         TermInfo toInfo = getTermInfo(toTerm, assignments, RelianceRuleRelation::To);
 
         RelianceTermCompatible compatibleInfo;
-        bool compatibleResult = termsEqual(fromInfo, toInfo, assignments, &compatibleInfo);
+        bool compatibleResult = termsEqual(fromInfo, toInfo, &compatibleInfo);
 
         if (compatibleResult)
         {
@@ -150,104 +105,6 @@ bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
     return true;
 }
 
-bool positiveModels(const std::vector<Literal> &left, const std::vector<int64_t> &leftAssignment,
-    const std::vector<Literal> &right, const std::vector<int64_t> &rightAssignment,
-    const std::vector<VariableAssignments::Group> &groups, 
-    std::vector<unsigned> &satisfied, bool sameRule, bool treatExistentialAsConstant = false)
-{
-    bool isCompletelySatisfied = true;
-
-    for (unsigned rightIndex = 0; rightIndex < right.size(); ++rightIndex)
-    {   
-        if (satisfied[rightIndex] == 1)
-            continue;
-
-        const Literal &rightLiteral = right[rightIndex];
-
-        bool rightSatisfied = false;
-        for (const Literal &leftLiteral : left)
-        {
-            if (rightLiteral.getPredicate().getId() != leftLiteral.getPredicate().getId())
-                continue;
-
-            bool leftModelsRight = true;
-            unsigned tupleSize = leftLiteral.getTupleSize(); //Should be the same as rightLiteral.getTupleSize()
-
-            for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
-            {
-                VTerm leftTerm = leftLiteral.getTermAtPos(termIndex);
-                VTerm rightTerm = rightLiteral.getTermAtPos(termIndex);
-           
-                int64_t leftConstant = positiveGetAssignedConstant(leftTerm, leftAssignment, groups);
-                int64_t rightConstant = positiveGetAssignedConstant(rightTerm, rightAssignment, groups);
-
-                if (leftConstant != rightConstant)
-                {
-                    if (!treatExistentialAsConstant && rightConstant < 0)
-                    {
-                        continue;
-                    }
-
-                    leftModelsRight = false;
-                    break;
-                }
-                
-                if (leftConstant == NOT_ASSIGNED) //it follows that rightConstant == NOT_ASSIGNED
-                {
-                    int64_t leftGroup = leftAssignment[leftTerm.getId()];
-                    int64_t rightGroup = rightAssignment[rightTerm.getId()];
-                    
-                    if (leftGroup == rightGroup)
-                    {
-                        if (leftGroup == NOT_ASSIGNED) //and rightGroup == NOT_ASSIGNED
-                        {
-                            if (sameRule && leftTerm.getId() == rightTerm.getId())
-                            {
-                                continue;
-                            }
-                            else
-                            {
-                                leftModelsRight = false;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        leftModelsRight = false;
-                        break;
-                    }
-                }
-                else //both are 'real' constants with the same value
-                {
-                    continue;
-                }
-            }
-
-            if (leftModelsRight)
-            {
-                rightSatisfied = true;
-                break;
-            }
-        }
-
-        if (rightSatisfied)
-        {
-            satisfied[rightIndex] = 1;
-        }
-        else
-        {
-            isCompletelySatisfied = false;
-        }
-    }
-
-    return isCompletelySatisfied;    
-}
-
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments);
@@ -280,13 +137,15 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
         return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
     }
 
+    std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
     satisfied.resize(ruleFrom.getHeads().size(), 0);
 
     //TODO: Maybe do a quick check whether or not this can fire, for example if the head contains a predicate which is not in I_a
-    bool fromRuleSatisfied = false;
-    fromRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, true);
-    fromRuleSatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleFrom.getHeads(), assignments.from, assignments.groups, satisfied, false);
+    bool fromRuleSatisfied = 
+        (relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
+        || relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings))
+        && checkConsistentExistential(existentialMappings);
 
     if (fromRuleSatisfied)
     {
@@ -295,11 +154,13 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     satisfied.clear();
     satisfied.resize(ruleTo.getBody().size(), 0);
+    existentialMappings.clear();
 
     //TODO: If phi_2 contains nulls then this check can be skipped (because there are no nulls in phi_1 and no nulls in phi_{22} -> see check in the beginning for that)
-    bool toBodySatisfied = false;
-    toBodySatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleTo.getBody(), assignments.to, assignments.groups, satisfied, false, true);
-    toBodySatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleTo.getBody(), assignments.to, assignments.groups, satisfied, true, true);
+    bool toBodySatisfied = 
+        (relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
+        || relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
+        && checkConsistentExistential(existentialMappings);
 
     if (toBodySatisfied)
     {
@@ -308,12 +169,14 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     satisfied.clear();
     satisfied.resize(ruleTo.getHeads().size(), 0);
+    existentialMappings.clear();
 
-    bool toRuleSatisfied = false;
-    toRuleSatisfied |= positiveModels(ruleFrom.getBody(), assignments.from, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, false);
-    toRuleSatisfied |= positiveModels(notMappedToBodyLiterals, assignments.to, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, true);
-    toRuleSatisfied |= positiveModels(ruleFrom.getHeads(), assignments.from, ruleTo.getHeads(), assignments.to, assignments.groups, satisfied, false);
-
+    bool toRuleSatisfied = 
+        (relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
+        || relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
+        || relianceModels(ruleFrom.getHeads(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
+        && checkConsistentExistential(existentialMappings);
+    
     return !toRuleSatisfied;
 }
 

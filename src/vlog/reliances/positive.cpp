@@ -45,34 +45,18 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
         VTerm fromTerm = literalFrom.getTermAtPos(termIndex);
         VTerm toTerm = literalTo.getTermAtPos(termIndex);
     
-        TermInfo fromInfo = getTermInfo(fromTerm, assignments, RelianceRuleRelation::From);
-        TermInfo toInfo = getTermInfo(toTerm, assignments, RelianceRuleRelation::To);
+        TermInfo fromInfo = getTermInfoUnify(fromTerm, assignments, RelianceRuleRelation::From);
+        TermInfo toInfo = getTermInfoUnify(toTerm, assignments, RelianceRuleRelation::To);
 
-        RelianceTermCompatible compatibleInfo;
-        bool compatibleResult = termsEqual(fromInfo, toInfo, &compatibleInfo);
+        // We may not assign a universal variable of fromRule to a null
+        if (fromInfo.type == TermInfo::Types::Universal && toInfo.constant < 0)
+            return false;
 
-        if (compatibleResult)
-        {
-            continue;
-        }
-        else
-        {
-            if (compatibleInfo.type == RelianceTermCompatible::Types::Incompatible)
-            {
-                return false;
-            }
-            else
-            {
-                // We may not assign a universal variable of fromRule to a null
-                if (fromInfo.type == TermInfo::Types::Universal && compatibleInfo.constant < 0)
-                {
-                    return false;
-                }
-
-                makeCompatible(compatibleInfo, assignments.from, assignments.to, assignments.groups);
-            }
-        }
+        if (!unifyTerms(fromInfo, toInfo, assignments))
+            return false;
     }
+
+    assignments.finishGroupAssignments();
 
     return true;
 }
@@ -88,16 +72,8 @@ bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
         
             if ((int32_t)currentTerm.getId() > 0)
             {
-                int64_t groupId = assignments.to[currentTerm.getId()];
-                if (groupId == NOT_ASSIGNED)
-                    continue;
-
-                const VariableAssignments::Group &group = assignments.groups[groupId];
-
-                if (group.value < 0)
-                {
+                if (assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To) < 0)
                     return false;
-                }
             }
         }
     }   
@@ -220,10 +196,10 @@ bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
     return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 }
 
-std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &rules)
 {
     std::vector<Rule> markedRules;
-    RelianceGraph result(rules.size()), resultTransposed(rules.size());
+    SimpleGraph result(rules.size()), resultTransposed(rules.size());
 
     std::vector<unsigned> variableCounts;
     variableCounts.reserve(rules.size());
@@ -287,7 +263,7 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
         {
             for (size_t ruleTo : toIterator->second)
             {
-                if (ruleFrom == 11 && ruleTo == 1039)
+                if (ruleFrom == 7 && ruleTo == 1137)
                     int x = 0;
 
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
@@ -309,7 +285,7 @@ std::pair<RelianceGraph, RelianceGraph> computePositiveReliances(std::vector<Rul
     return std::make_pair(result, resultTransposed);
 }
 
-unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const RelianceGraph &positiveGraph)
+unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const SimpleGraph &positiveGraph)
 {
     unsigned result = 0;
 

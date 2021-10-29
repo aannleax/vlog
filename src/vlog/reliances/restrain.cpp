@@ -111,21 +111,19 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     const Rule &ruleFrom, const Rule &ruleTo, const std::vector<Literal> &ruleToPiece,
     const VariableAssignments &assignments);
 
-bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals,
-    const std::vector<int64_t> &assignment, const std::vector<VariableAssignments::Group> &groups)
+bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals, 
+    const VariableAssignments &assignments)
 {
     for (const Literal &literal : literals)
     {
         for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
         {
             VTerm currentTerm = literal.getTermAtPos(termIndex);
-            int64_t groupId = assignment[std::abs((int32_t)currentTerm.getId())];
 
-            if ((int32_t)currentTerm.getId() < 0 && groupId != NOT_ASSIGNED)
+            if ((int32_t)currentTerm.getId() < 0)
             {
-                const VariableAssignments::Group &group = groups[groupId];
-                
-                if (group.value < 0) // value is assigned to a null
+                if (assignments.getGroupId((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED
+                    || assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED)
                     return false;
             }                
         }
@@ -156,7 +154,10 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
         notMappedPieceLiterals.push_back(ruleToPiece[headIndex]);
     }
 
-    if (!checkUnmappedExistentialVariables(notMappedPieceLiterals, assignments.to, assignments.groups))
+    if (!assignments.hasMappedExistentialVariable)
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
+
+    if (!checkUnmappedExistentialVariables(notMappedPieceLiterals, assignments))
     {
         return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
     }
@@ -213,35 +214,22 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
         VTerm fromTerm = literalFrom.getTermAtPos(termIndex);
         VTerm toTerm = literalTo.getTermAtPos(termIndex);
     
-        TermInfo fromInfo = getTermInfo(fromTerm, assignments, RelianceRuleRelation::From);
-        TermInfo toInfo = getTermInfo(toTerm, assignments, RelianceRuleRelation::To);
+        TermInfo fromInfo = getTermInfoUnify(fromTerm, assignments, RelianceRuleRelation::From);
+        TermInfo toInfo = getTermInfoUnify(toTerm, assignments, RelianceRuleRelation::To);
 
-        RelianceTermCompatible compatibleInfo;
-        bool compatibleResult = termsEqual(fromInfo, toInfo, &compatibleInfo);
+         // We may not assign any universal variable to a null
+        if ((toInfo.type == TermInfo::Types::Universal || fromInfo.type == TermInfo::Types::Universal) 
+            && (fromInfo.constant < 0 || toInfo.constant < 0))
+            return false;
 
-        if (compatibleResult)
-        {
-            continue;
-        }
-        else
-        {
-            if (compatibleInfo.type == RelianceTermCompatible::Types::Incompatible)
-            {
-                return false;
-            }
-            else
-            {
-                // We may not assign a universal variable to a null
-                if ((toInfo.type == TermInfo::Types::Universal || fromInfo.type == TermInfo::Types::Universal) 
-                    && compatibleInfo.constant < 0)
-                {
-                    return false;
-                }
+        if (!unifyTerms(fromInfo, toInfo, assignments))
+            return false;
 
-                makeCompatible(compatibleInfo, assignments.from, assignments.to, assignments.groups);
-            }
-        }
+        if (toInfo.type == TermInfo::Types::Existential)
+            assignments.hasMappedExistentialVariable = true;
     }
+
+    assignments.finishGroupAssignments();
 
     return true;
 }
@@ -287,9 +275,9 @@ bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
 
 }
 
-std::pair<RelianceGraph, RelianceGraph> computeRestrainReliances(std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &rules)
 {
-    RelianceGraph result(rules.size()), resultTransposed(rules.size());
+    SimpleGraph result(rules.size()), resultTransposed(rules.size());
 
     std::vector<MarkResult> markedRules;
     markedRules.reserve(rules.size());
@@ -349,6 +337,9 @@ std::pair<RelianceGraph, RelianceGraph> computeRestrainReliances(std::vector<Rul
         {
             for (size_t ruleTo : iteratorTo->second)
             {
+                if (ruleFrom == 0 && ruleTo == 754)
+                    int x = 0;
+
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;

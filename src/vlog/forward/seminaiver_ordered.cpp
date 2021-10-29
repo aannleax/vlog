@@ -18,7 +18,7 @@ SemiNaiverOrdered::SemiNaiverOrdered(EDBLayer &layer,
     std::cout << "Running constructor of SemiNaiverOrdered" << '\n';
 }
 
-void SemiNaiverOrdered::fillOrder(const RelianceGraph &graph, unsigned node, 
+void SemiNaiverOrdered::fillOrder(const SimpleGraph &graph, unsigned node, 
     std::vector<unsigned> &visited, stack<unsigned> &stack)
 {
     visited[node] = 1;
@@ -32,7 +32,7 @@ void SemiNaiverOrdered::fillOrder(const RelianceGraph &graph, unsigned node,
     stack.push(node);
 }
 
-void SemiNaiverOrdered::dfsUntil(const RelianceGraph &graph, unsigned node, 
+void SemiNaiverOrdered::dfsUntil(const SimpleGraph &graph, unsigned node, 
     std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup)
 {
     visited[node] = 1;
@@ -46,7 +46,7 @@ void SemiNaiverOrdered::dfsUntil(const RelianceGraph &graph, unsigned node,
 }
 
 SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
-    const RelianceGraph &graph, const RelianceGraph &graphTransposed)
+    const SimpleGraph &graph, const SimpleGraph &graphTransposed)
 {
     RelianceGroupResult result;
     result.assignments.resize(graph.edges.size(), 0);
@@ -95,8 +95,8 @@ SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
 }
 
 void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
-    const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed,
-    const RelianceGraph &blockingGraphTransposed,
+    const SimpleGraph &positiveGraph, const SimpleGraph &positiveGraphTransposed,
+    const SimpleGraph &blockingGraphTransposed,
     const RelianceGroupResult &groupsResult, 
     std::vector<PositiveGroup> &positiveGroups)
 {
@@ -654,10 +654,10 @@ void SemiNaiverOrdered::setActive(PositiveGroup *currentGroup)
     }
 }
 
-std::pair<RelianceGraph, RelianceGraph> DEBUGEveryIDBInOneGroup(std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> DEBUGEveryIDBInOneGroup(std::vector<Rule> &rules)
 {
-    RelianceGraph result(rules.size());
-    RelianceGraph resultTransposed(rules.size());
+    SimpleGraph result(rules.size());
+    SimpleGraph resultTransposed(rules.size());
 
     int firstIDB = -1;
     int firstEDB = -1;
@@ -710,9 +710,9 @@ std::pair<RelianceGraph, RelianceGraph> DEBUGEveryIDBInOneGroup(std::vector<Rule
     return std::make_pair(result, resultTransposed);
 }
 
-std::pair<RelianceGraph, RelianceGraph> DEBUGblockingGraphOfLUBM(unsigned ruleSize)
+std::pair<SimpleGraph, SimpleGraph> DEBUGblockingGraphOfLUBM(unsigned ruleSize)
 {
-    RelianceGraph result(ruleSize), resultTransposed(ruleSize);
+    SimpleGraph result(ruleSize), resultTransposed(ruleSize);
 
     std::vector<unsigned> neighbors42 =
         {4, 10};
@@ -781,25 +781,25 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::chrono::system_clock::time_point relianceStart = std::chrono::system_clock::now();
     std::cout << "Computing positive reliances..." << '\n';
-    std::pair<RelianceGraph, RelianceGraph> relianceGraphs = computePositiveReliances(allRules);
-    // std::pair<RelianceGraph, RelianceGraph> relianceGraphs = DEBUGEveryIDBInOneGroup(allRules);
+    std::pair<SimpleGraph, SimpleGraph> SimpleGraphs = computePositiveReliances(allRules);
+    // std::pair<SimpleGraph, SimpleGraph> SimpleGraphs = DEBUGEveryIDBInOneGroup(allRules);
 
     /*std::cout << "Positive reliances: " << '\n';
-    for (unsigned from = 0; from < relianceGraphs.first.edges.size(); ++from)
+    for (unsigned from = 0; from < SimpleGraphs.first.edges.size(); ++from)
     {
-        for (unsigned to :  relianceGraphs.first.edges[from])
+        for (unsigned to :  SimpleGraphs.first.edges[from])
         {
             std::cout << "positive reliance: " << from << " -> " << to << '\n';
         }
     }*/
 
-    // unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, relianceGraphs.first);
+    // unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, SimpleGraphs.first);
     // std::cout << "There are " << fakeReliances << " fake reliances." << '\n';
 
-    // relianceGraphs.first.saveCSV("graph_new.csv");
+    SimpleGraphs.first.saveCSV("positive_V2.csv");
 
     std::cout << "Computing positive reliance groups..." << '\n';
-    RelianceGroupResult relianceGroups = computeRelianceGroups(relianceGraphs.first, relianceGraphs.second);    
+    RelianceGroupResult relianceGroups = computeRelianceGroups(SimpleGraphs.first, SimpleGraphs.second);    
     std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
 
     /*for (vector<unsigned> &group : relianceGroups.groups)
@@ -818,14 +818,14 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::vector<StatIteration> costRules;
 
-    //std::pair<RelianceGraph, RelianceGraph> blockingGraphs = std::make_pair(RelianceGraph(allRules.size()), RelianceGraph(allRules.size()));
-    std::cout << "Computing blocking reliances..." << '\n';
+    //std::pair<SimpleGraph, SimpleGraph> blockingGraphs = std::make_pair(SimpleGraph(allRules.size()), SimpleGraph(allRules.size()));
+    std::cout << "Computing restraint reliances..." << '\n';
     relianceStart = std::chrono::system_clock::now();
-    std::pair<RelianceGraph, RelianceGraph> blockingGraphs = computeRestrainReliances(allRules);
-    // std::pair<RelianceGraph, RelianceGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
-    std::cout << "Blocking computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
+    std::pair<SimpleGraph, SimpleGraph> blockingGraphs = computeRestrainReliances(allRules);
+    // std::pair<SimpleGraph, SimpleGraph> blockingGraphs = DEBUGblockingGraphOfLUBM(allRules.size());
+    std::cout << "Restraint computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
 
-    blockingGraphs.first.saveCSV("blocking_new.csv");
+    blockingGraphs.first.saveCSV("blocking_V2.csv");
 
     // for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
     // {
@@ -843,7 +843,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
 #if RUNMAT
     std::vector<PositiveGroup> positiveGroups;
-    prepare(lastExecution, singleRule, allRules, relianceGraphs.first, relianceGraphs.second, blockingGraphs.second, relianceGroups, positiveGroups);
+    prepare(lastExecution, singleRule, allRules, SimpleGraphs.first, SimpleGraphs.second, blockingGraphs.second, relianceGroups, positiveGroups);
 
     std::deque<PositiveGroup *> positiveStack;
 

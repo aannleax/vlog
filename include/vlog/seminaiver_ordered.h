@@ -53,9 +53,9 @@ public:
         PredId_t predIgnoreBlock = -1);
         
 private:
-    void fillOrder(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
-    void dfsUntil(const RelianceGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
-    RelianceGroupResult computeRelianceGroups(const RelianceGraph &graph, const RelianceGraph &graphTransposed);
+    void fillOrder(const SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
+    void dfsUntil(const SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
+    RelianceGroupResult computeRelianceGroups(const SimpleGraph &graph, const SimpleGraph &graphTransposed);
     void setActive(PositiveGroup *currentGroup);
 
     void orderGroupExistentialLast(PositiveGroup *group);
@@ -63,7 +63,7 @@ private:
     void orderGroupPredicateCount(PositiveGroup *group);
     void orderGroupManually(PositiveGroup *group);
 
-    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const RelianceGraph &positiveGraph, const RelianceGraph &positiveGraphTransposed, const RelianceGraph &blockingGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
+    void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const SimpleGraph &positiveGraph, const SimpleGraph &positiveGraphTransposed, const SimpleGraph &blockingGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
   
     bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool fixpoint, unsigned long *timeout);
     bool executeGroupBottomUp(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);

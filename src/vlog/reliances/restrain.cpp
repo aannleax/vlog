@@ -351,7 +351,7 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
         {
             for (size_t ruleTo : iteratorTo->second)
             {
-                if (ruleFrom == 0 && ruleTo == 754)
+                if (ruleFrom == 1163 && ruleTo == 1082)
                     int x = 0;
 
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;

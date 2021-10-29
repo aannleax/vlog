@@ -900,12 +900,15 @@ void SemiNaiverOrdered::run(size_t lastExecution,
                 }
 
                 //if (currentGroup == firstBlockedGroup)
-                    //std::cout << "Queue is has no unblocked triggered members" << '\n';
+                    //std::cout << "Queue has no unblocked triggered members" << '\n';
 
                 if (!isBlocked || currentGroup == firstBlockedGroup)
                 {
-                    // if (isBlocked)
-                    //     std::cout << "blocked" << '\n';
+                    if (isBlocked)
+                        std::cout << "blocked" << '\n';
+
+                    if (!isBlocked)
+                        std::cout << "not blocked" << '\n';
 
                     newDerivations = executeGroup(currentGroup->rules, costRules, !isBlocked, timeout);
                     // newDerivations = executeGroupInOrder(currentGroup->rules, currentGroup->order, costRules, !isBlocked, timeout);

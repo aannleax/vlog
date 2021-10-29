@@ -110,8 +110,8 @@ struct VariableAssignments
     void assignConstants(int32_t variableId, RelianceRuleRelation relation, int64_t constant)
     {
         variableId = std::abs(variableId);
-        int32_t trueId = variableId + (relation == RelianceRuleRelation::From) ? 0 : variableToOffset;
-        assignConstantsNext(variableId, constant);
+        int32_t trueId = variableId + ((relation == RelianceRuleRelation::From) ? 0 : variableToOffset);
+        assignConstantsNext(trueId, constant);
     }
 
     void finishGroupAssignments()

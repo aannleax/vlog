@@ -7,108 +7,108 @@
 #include <unordered_map>
 #include <unordered_set>
 
-struct RestrainPiece
-{
-    std::vector<unsigned> LiteralIndices;
-};
+// struct RestrainPiece
+// {
+//     std::vector<unsigned> LiteralIndices;
+// };
 
-struct MarkResult
-{
-    MarkResult(uint32_t ruleId, const std::vector<Literal> &body, const std::vector<Literal> &heads, const std::vector<std::vector<Literal>> &headSplit) 
-        : singleRule(ruleId, heads, body), headPieces(headSplit) {}
+// struct MarkResult
+// {
+//     MarkResult(uint32_t ruleId, const std::vector<Literal> &body, const std::vector<Literal> &heads, const std::vector<std::vector<Literal>> &headSplit) 
+//         : singleRule(ruleId, heads, body), headPieces(headSplit) {}
 
-    Rule singleRule;
-    std::vector<std::vector<Literal>> headPieces;
-};
+//     Rule singleRule;
+//     std::vector<std::vector<Literal>> headPieces;
+// };
 
-void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex, std::vector<bool> &literalsInPieces, std::vector<Literal> &result)
-{
-    bool validPiece = false; //Piece has to contain an existential variable
+// void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex, std::vector<bool> &literalsInPieces, std::vector<Literal> &result)
+// {
+//     bool validPiece = false; //Piece has to contain an existential variable
 
-    const Literal &currentLiteral = heads[currentLiteralIndex];
-    literalsInPieces[currentLiteralIndex] = true;
+//     const Literal &currentLiteral = heads[currentLiteralIndex];
+//     literalsInPieces[currentLiteralIndex] = true;
 
-    for (unsigned termIndex = 0; termIndex < currentLiteral.getTupleSize(); ++termIndex)
-    {
-        VTerm currentTerm = currentLiteral.getTermAtPos(termIndex);
+//     for (unsigned termIndex = 0; termIndex < currentLiteral.getTupleSize(); ++termIndex)
+//     {
+//         VTerm currentTerm = currentLiteral.getTermAtPos(termIndex);
 
-        if ((int)currentTerm.getId() >= 0)
-            continue;
+//         if ((int)currentTerm.getId() >= 0)
+//             continue;
 
-        validPiece = true;
+//         validPiece = true;
 
-        for (unsigned searchIndex = currentLiteralIndex + 1; searchIndex < heads.size(); ++searchIndex)
-        {
-            if (literalsInPieces[searchIndex])
-                continue;
+//         for (unsigned searchIndex = currentLiteralIndex + 1; searchIndex < heads.size(); ++searchIndex)
+//         {
+//             if (literalsInPieces[searchIndex])
+//                 continue;
 
-            const Literal &currentSearchedLiteral = heads[searchIndex];
-            for (unsigned searchTermIndex = 0; searchTermIndex < currentSearchedLiteral.getTupleSize(); ++searchTermIndex)
-            {
-                VTerm currentSearchedTerm = currentSearchedLiteral.getTermAtPos(searchTermIndex);
+//             const Literal &currentSearchedLiteral = heads[searchIndex];
+//             for (unsigned searchTermIndex = 0; searchTermIndex < currentSearchedLiteral.getTupleSize(); ++searchTermIndex)
+//             {
+//                 VTerm currentSearchedTerm = currentSearchedLiteral.getTermAtPos(searchTermIndex);
             
-                if (currentTerm.getId() == currentSearchedTerm.getId())
-                {
-                    createPiece(heads, searchIndex, literalsInPieces, result);
-                    break;
-                }
-            }
-        }
-    }
+//                 if (currentTerm.getId() == currentSearchedTerm.getId())
+//                 {
+//                     createPiece(heads, searchIndex, literalsInPieces, result);
+//                     break;
+//                 }
+//             }
+//         }
+//     }
 
-    if (validPiece)
-        result.push_back(currentLiteral);
-}
+//     if (validPiece)
+//         result.push_back(currentLiteral);
+// }
 
-MarkResult markExistentialVariablesAndPieces(const Rule &rule)
-{
-    uint32_t ruleId = rule.getId();
-    std::vector<Literal> body = rule.getBody();
-    std::vector<Literal> heads;
+// MarkResult markExistentialVariablesAndPieces(const Rule &rule)
+// {
+//     uint32_t ruleId = rule.getId();
+//     std::vector<Literal> body = rule.getBody();
+//     std::vector<Literal> heads;
 
-    std::vector<Var_t> existentialVariables = rule.getExistentialVariables();
+//     std::vector<Var_t> existentialVariables = rule.getExistentialVariables();
 
-    for (const Literal &literal: rule.getHeads())
-    {
-        VTuple *tuple = new VTuple(literal.getTupleSize());
+//     for (const Literal &literal: rule.getHeads())
+//     {
+//         VTuple *tuple = new VTuple(literal.getTupleSize());
 
-        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
-        {
-            VTerm currentTerm = literal.getTermAtPos(termIndex);;
+//         for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+//         {
+//             VTerm currentTerm = literal.getTermAtPos(termIndex);;
 
-            if (currentTerm.getId() > 0 && std::find(existentialVariables.begin(), existentialVariables.end(), currentTerm.getId()) != existentialVariables.end())
-            {
-                currentTerm.setId(-currentTerm.getId());
-            }
+//             if (currentTerm.getId() > 0 && std::find(existentialVariables.begin(), existentialVariables.end(), currentTerm.getId()) != existentialVariables.end())
+//             {
+//                 currentTerm.setId(-currentTerm.getId());
+//             }
 
-            tuple->set(currentTerm, termIndex);
-        }
+//             tuple->set(currentTerm, termIndex);
+//         }
 
-        heads.push_back(Literal(literal.getPredicate(), *tuple, literal.isNegated()));
-    }
+//         heads.push_back(Literal(literal.getPredicate(), *tuple, literal.isNegated()));
+//     }
 
-    std::vector<std::vector<Literal>> headsSplit;
-    std::vector<bool> literalsInPieces;
-    literalsInPieces.resize(heads.size(), false);
+//     std::vector<std::vector<Literal>> headsSplit;
+//     std::vector<bool> literalsInPieces;
+//     literalsInPieces.resize(heads.size(), false);
 
-    for (unsigned literalIndex = 0; literalIndex < heads.size(); ++literalIndex)
-    {
-        const Literal &currentLiteral = heads[literalIndex];
+//     for (unsigned literalIndex = 0; literalIndex < heads.size(); ++literalIndex)
+//     {
+//         const Literal &currentLiteral = heads[literalIndex];
         
-        if (literalsInPieces[literalIndex])
-            continue;
+//         if (literalsInPieces[literalIndex])
+//             continue;
 
-        std::vector<Literal> newPiece;
-        createPiece(heads, literalIndex, literalsInPieces, newPiece);
-        if (newPiece.size() > 0)
-            headsSplit.push_back(newPiece);
-    }
+//         std::vector<Literal> newPiece;
+//         createPiece(heads, literalIndex, literalsInPieces, newPiece);
+//         if (newPiece.size() > 0)
+//             headsSplit.push_back(newPiece);
+//     }
 
-    return MarkResult(ruleId, body, heads, headsSplit);
-}
+//     return MarkResult(ruleId, body, heads, headsSplit);
+// }
 
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
-    const Rule &ruleFrom, const Rule &ruleTo, const std::vector<Literal> &ruleToPiece,
+    const Rule &ruleFrom, const Rule &ruleTo, 
     const VariableAssignments &assignments);
 
 bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals, 
@@ -133,13 +133,14 @@ bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals,
 }
 
 bool restrainCheck(std::vector<unsigned> &mappingDomain, 
-    const Rule &ruleFrom, const Rule &ruleTo, const std::vector<Literal> &ruleToPiece,
+    const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
-    std::vector<Literal> notMappedPieceLiterals;
-    notMappedPieceLiterals.reserve(ruleToPiece.size());
-    for (unsigned headIndex = 0; headIndex < ruleToPiece.size(); ++headIndex)
+    const std::vector<Literal> toHeadLiterals = ruleTo.getHeads();
+    std::vector<Literal> notMappedHeadLiterals;
+    notMappedHeadLiterals.reserve(ruleTo.getHeads().size());
+    for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
     {
         if (headIndex == mappingDomain[nextInDomainIndex])
         {
@@ -151,15 +152,15 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
             continue;
         }
 
-        notMappedPieceLiterals.push_back(ruleToPiece[headIndex]);
+        notMappedHeadLiterals.push_back(toHeadLiterals[headIndex]);
     }
 
     if (!assignments.hasMappedExistentialVariable)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 
-    if (!checkUnmappedExistentialVariables(notMappedPieceLiterals, assignments))
+    if (!checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments))
     {
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
     }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
@@ -175,17 +176,17 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
 
     existentialMappings.clear();
     satisfied.clear();
-    satisfied.resize(ruleToPiece.size(), 0);
+    satisfied.resize(ruleTo.getHeads().size(), 0);
 
-    bool pieceSatisfied = 
-        (relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleToPiece, RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleToPiece, RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleToPiece, RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedPieceLiterals, RelianceRuleRelation::To, ruleToPiece, RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
+    bool alternativeMatchAlreadyPresent = 
+        (relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
+        || relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings, true)
+        || relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
+        || relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
         && checkConsistentExistential(existentialMappings);
-        
-    if (pieceSatisfied)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
+
+    if (alternativeMatchAlreadyPresent)
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 
     existentialMappings.clear();
     satisfied.clear();
@@ -193,13 +194,13 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
 
     bool fromHeadSatisfied = 
         (relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
-        || relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
+        || relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings, true)
         || relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedPieceLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings))
+        || relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings))
         && checkConsistentExistential(existentialMappings);
 
     if (fromHeadSatisfied)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 
     return true;
 }
@@ -235,14 +236,14 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
 }
 
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
-    const Rule &ruleFrom, const Rule &ruleTo, const std::vector<Literal> &ruleToPiece,
+    const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments)
 {
     unsigned headToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
-    for (unsigned headToIndex = headToStartIndex; headToIndex < ruleToPiece.size(); ++headToIndex)
+    for (unsigned headToIndex = headToStartIndex; headToIndex < ruleTo.getHeads().size(); ++headToIndex)
     {
-        const Literal &literalTo = ruleToPiece[headToIndex];
+        const Literal &literalTo = ruleTo.getHeads()[headToIndex];
         mappingDomain.push_back(headToIndex);
 
         for (unsigned headFromIndex = 0; headFromIndex < ruleFrom.getHeads().size(); ++headFromIndex)
@@ -256,7 +257,7 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
             if (!restrainExtendAssignment(literalFrom, literalTo, extendedAssignments))
                 continue;
 
-            if (restrainCheck(mappingDomain, ruleFrom, ruleTo, ruleToPiece, extendedAssignments))
+            if (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
                 return true;
         }
 
@@ -266,21 +267,22 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     return false;
 }
 
-bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, const std::vector<Literal> &ruleToPiece, unsigned variableCountTo)
+bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo)
 {
     std::vector<unsigned> mappingDomain;
     VariableAssignments assignments(variableCountFrom, variableCountTo);
 
-    return restrainExtend(mappingDomain, ruleFrom, ruleTo, ruleToPiece, assignments);
-
+    return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 }
+
 
 std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &rules)
 {
     SimpleGraph result(rules.size()), resultTransposed(rules.size());
-
-    std::vector<MarkResult> markedRules;
+    
+    std::vector<Rule> markedRules;
     markedRules.reserve(rules.size());
+    
     std::vector<unsigned> variableCounts;
     variableCounts.reserve(rules.size());
 
@@ -294,14 +296,15 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
 
     for (const Rule &currentRule : rules)
     {
-        markedRules.push_back(markExistentialVariablesAndPieces(currentRule));
+        Rule markedRule = markExistentialVariables(currentRule);
+        markedRules.push_back(markedRule);
     }
 
     std::unordered_map<PredId_t, std::vector<size_t>> headFromMap, headToMap;
 
     for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
     {   
-        const Rule &markedRule = markedRules[ruleIndex].singleRule;
+        const Rule &markedRule = markedRules[ruleIndex];
 
         for (const Literal &currentLiteral : markedRule.getHeads())
         {
@@ -337,25 +340,26 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
         {
             for (size_t ruleTo : iteratorTo->second)
             {
-                if (ruleFrom == 0 && ruleTo == 754)
+                if (ruleFrom == 0)
+                  int y = 0;
+
+                if (ruleFrom == 0 && ruleTo == 886)
                     int x = 0;
 
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;
+                proccesedPairs.insert(hash);
 
                 unsigned variableCountFrom = variableCounts[ruleFrom];
                 unsigned variableCountTo = variableCounts[ruleTo];
 
-                for (unsigned pieceIndex = 0; pieceIndex < markedRules[ruleTo].headPieces.size(); ++pieceIndex)
+                if (restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
                 {
-                    if (restrainReliance(markedRules[ruleFrom].singleRule, variableCountFrom, markedRules[ruleTo].singleRule, markedRules[ruleTo].headPieces[pieceIndex], variableCountTo))
-                    {
-                        result.addEdge(ruleFrom, ruleTo);
-                        resultTransposed.addEdge(ruleTo, ruleFrom);
-                    
-                        break;
-                    }
+                    result.addEdge(ruleFrom, ruleTo);
+                    resultTransposed.addEdge(ruleTo, ruleFrom);
+                
+                    break;
                 }
             }
         }

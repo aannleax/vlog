@@ -6,35 +6,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-Rule markExistentialVariables(const Rule &rule)
-{
-    uint32_t ruleId = rule.getId();
-    std::vector<Literal> body = rule.getBody();
-    std::vector<Literal> heads;
-
-    std::vector<Var_t> existentialVariables = rule.getExistentialVariables();
-    for (const Literal &literal: rule.getHeads())
-    {
-        VTuple *tuple = new VTuple(literal.getTupleSize());
-
-        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
-        {
-            VTerm currentTerm = literal.getTermAtPos(termIndex);;
-
-            if (currentTerm.getId() > 0 && std::find(existentialVariables.begin(), existentialVariables.end(), currentTerm.getId()) != existentialVariables.end())
-            {
-                currentTerm.setId(-currentTerm.getId());
-            }
-
-            tuple->set(currentTerm, termIndex);
-        }
-
-        heads.push_back(Literal(literal.getPredicate(), *tuple, literal.isNegated()));
-    }
-
-    return Rule(ruleId, heads, body);
-}
-
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
     VariableAssignments &assignments)
 {
@@ -198,8 +169,10 @@ bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
 
 std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &rules)
 {
-    std::vector<Rule> markedRules;
     SimpleGraph result(rules.size()), resultTransposed(rules.size());
+    
+    std::vector<Rule> markedRules;
+    markedRules.reserve(rules.size());
 
     std::vector<unsigned> variableCounts;
     variableCounts.reserve(rules.size());
@@ -269,6 +242,7 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;
+                proccesedPairs.insert(hash);
 
                 unsigned variableCountFrom = variableCounts[ruleFrom];
                 unsigned variableCountTo = variableCounts[ruleTo];

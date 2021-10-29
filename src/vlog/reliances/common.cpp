@@ -26,6 +26,35 @@ unsigned highestLiteralsId(const std::vector<Literal> &literalVector)
     return result;
 }
 
+Rule markExistentialVariables(const Rule &rule)
+{
+    uint32_t ruleId = rule.getId();
+    std::vector<Literal> body = rule.getBody();
+    std::vector<Literal> heads;
+
+    std::vector<Var_t> existentialVariables = rule.getExistentialVariables();
+    for (const Literal &literal: rule.getHeads())
+    {
+        VTuple *tuple = new VTuple(literal.getTupleSize());
+
+        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+        {
+            VTerm currentTerm = literal.getTermAtPos(termIndex);;
+
+            if (currentTerm.getId() > 0 && std::find(existentialVariables.begin(), existentialVariables.end(), currentTerm.getId()) != existentialVariables.end())
+            {
+                currentTerm.setId(-currentTerm.getId());
+            }
+
+            tuple->set(currentTerm, termIndex);
+        }
+
+        heads.push_back(Literal(literal.getPredicate(), *tuple, literal.isNegated()));
+    }
+
+    return Rule(ruleId, heads, body);
+}
+
 TermInfo getTermInfoUnify(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation)
 {
     TermInfo result;
@@ -56,7 +85,7 @@ TermInfo getTermInfoUnify(VTerm term, const VariableAssignments &assignments, Re
 }
 
 TermInfo getTermInfoModels(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation,
-    bool useDefaultForExistential)
+    bool alwaysDefaultAssignExistentials)
 {
     TermInfo result;
     result.relation = relation;
@@ -78,7 +107,7 @@ TermInfo getTermInfoModels(VTerm term, const VariableAssignments &assignments, R
     {
         result.type = TermInfo::Types::Existential;
 
-        if (useDefaultForExistential)
+        if (alwaysDefaultAssignExistentials)
         {
             result.constant = (int32_t)term.getId();
         }
@@ -271,7 +300,8 @@ bool unifyTerms(const TermInfo &fromInfo, const TermInfo &toInfo, VariableAssign
 bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftRelation,
     const std::vector<Literal> &right, RelianceRuleRelation rightRelation,
     const VariableAssignments &assignments,
-    std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings
+    std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings,
+    bool alwaysDefaultAssignExistentials
 )
 {
     bool isCompletelySatisfied = true;
@@ -300,8 +330,8 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
                 VTerm leftTerm = leftLiteral.getTermAtPos(termIndex);
                 VTerm rightTerm = rightLiteral.getTermAtPos(termIndex);
 
-                TermInfo leftInfo = getTermInfoModels(leftTerm, assignments, leftRelation, false);
-                TermInfo rightInfo = getTermInfoModels(rightTerm, assignments, rightRelation, true); //TODO: Rethink order of for loops in order to save this computation
+                TermInfo leftInfo = getTermInfoModels(leftTerm, assignments, leftRelation, alwaysDefaultAssignExistentials);
+                TermInfo rightInfo = getTermInfoModels(rightTerm, assignments, rightRelation, false); //TODO: Rethink order of for loops in order to save this computation
 
                 if (rightInfo.type == TermInfo::Types::Existential)
                 {

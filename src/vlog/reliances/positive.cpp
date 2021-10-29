@@ -87,12 +87,16 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
     satisfied.resize(ruleFrom.getHeads().size(), 0);
+    prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
 
     //TODO: Maybe do a quick check whether or not this can fire, for example if the head contains a predicate which is not in I_a
-    bool fromRuleSatisfied = 
-        (relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings))
-        && checkConsistentExistential(existentialMappings);
+    bool fromRuleSatisfied = relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+    fromRuleSatisfied |= relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+
+    if (fromRuleSatisfied && ruleFrom.isExistential())
+    {
+        fromRuleSatisfied = checkConsistentExistential(existentialMappings);
+    }
 
     if (fromRuleSatisfied)
     {
@@ -101,13 +105,16 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     satisfied.clear();
     satisfied.resize(ruleTo.getBody().size(), 0);
-    existentialMappings.clear();
+    prepareExistentialMappings(ruleTo.getBody(), RelianceRuleRelation::To, assignments, existentialMappings);
 
     //TODO: If phi_2 contains nulls then this check can be skipped (because there are no nulls in phi_1 and no nulls in phi_{22} -> see check in the beginning for that)
-    bool toBodySatisfied = 
-        (relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
-        && checkConsistentExistential(existentialMappings);
+    bool toBodySatisfied = relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+    toBodySatisfied = relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+
+    if (toBodySatisfied && ruleTo.isExistential())
+    {
+        toBodySatisfied = checkConsistentExistential(existentialMappings);
+    }
 
     if (toBodySatisfied)
     {
@@ -116,14 +123,17 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     satisfied.clear();
     satisfied.resize(ruleTo.getHeads().size(), 0);
-    existentialMappings.clear();
+    prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
 
-    bool toRuleSatisfied = 
-        (relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(ruleFrom.getHeads(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
-        && checkConsistentExistential(existentialMappings);
-    
+    bool toRuleSatisfied = relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+    toRuleSatisfied |= relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+    toRuleSatisfied |= relianceModels(ruleFrom.getHeads(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+ 
+    if (toRuleSatisfied && ruleTo.isExistential())
+    {
+        toRuleSatisfied = checkConsistentExistential(existentialMappings);
+    }
+
     return !toRuleSatisfied;
 }
 
@@ -236,9 +246,6 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &
         {
             for (size_t ruleTo : toIterator->second)
             {
-                if (ruleFrom == 7 && ruleTo == 1137)
-                    int x = 0;
-
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;

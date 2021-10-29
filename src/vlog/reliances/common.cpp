@@ -297,14 +297,40 @@ bool unifyTerms(const TermInfo &fromInfo, const TermInfo &toInfo, VariableAssign
     return true;
 }
 
+void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleRelation rightRelation,
+    const VariableAssignments &assignments,
+    std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings)
+{
+    existentialMappings.clear();
+
+    for (unsigned rightIndex = 0; rightIndex < right.size(); ++rightIndex)
+    {      
+        const Literal &rightLiteral = right[rightIndex];
+        unsigned tupleSize = rightLiteral.getTupleSize(); 
+
+        for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
+        {
+            VTerm rightTerm = rightLiteral.getTermAtPos(termIndex);
+            TermInfo rightInfo = getTermInfoModels(rightTerm, assignments, rightRelation, false);
+     
+            if (rightInfo.type == TermInfo::Types::Existential)
+            {
+                existentialMappings.emplace_back();
+                break;
+            }
+        }
+    }
+}
+
 bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftRelation,
     const std::vector<Literal> &right, RelianceRuleRelation rightRelation,
     const VariableAssignments &assignments,
     std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings,
-    bool alwaysDefaultAssignExistentials
+    bool alwaysDefaultAssignExistentials,
+    bool treatExistentialAsVariables
 )
 {
-    bool isCompletelySatisfied = true;
+    bool isCompletelySatisfied = true; //refers to non-existential atoms
     
     size_t existentialMappingIndex = 0;
 
@@ -314,13 +340,15 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
             continue;
 
         const Literal &rightLiteral = right[rightIndex];
-        std::unordered_map<int64_t, TermInfo> *currentMapping = nullptr;
-
+        
         bool rightSatisfied = false;
+        bool rightExistential = false;
         for (const Literal &leftLiteral : left)
         {
             if (rightLiteral.getPredicate().getId() != leftLiteral.getPredicate().getId())
                 continue;
+
+            std::unordered_map<int64_t, TermInfo> *currentMapping = nullptr;
 
             bool leftModelsRight = true;
             unsigned tupleSize = leftLiteral.getTupleSize(); //Should be the same as rightLiteral.getTupleSize()
@@ -333,22 +361,17 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
                 TermInfo leftInfo = getTermInfoModels(leftTerm, assignments, leftRelation, alwaysDefaultAssignExistentials);
                 TermInfo rightInfo = getTermInfoModels(rightTerm, assignments, rightRelation, false); //TODO: Rethink order of for loops in order to save this computation
 
-                if (rightInfo.type == TermInfo::Types::Existential)
+                if (treatExistentialAsVariables && rightInfo.type == TermInfo::Types::Existential)
                 {
+                    rightExistential = true;
+
                     if (currentMapping == nullptr)
-                    {
-                        if (existentialMappingIndex >= existentialMappings.size())
-                        {
-                            existentialMappings.emplace_back();
-                        }
-
-                        std::vector<std::unordered_map<int64_t, TermInfo>> &currentMappingVector = existentialMappings[existentialMappingIndex];
-                        ++existentialMappingIndex;
-
+                    {   
+                        auto &currentMappingVector = existentialMappings[existentialMappingIndex];
                         currentMappingVector.emplace_back();
                         currentMapping = &currentMappingVector.back();
                     }
-
+                 
                     auto mapIterator = currentMapping->find(rightInfo.termId);
                     if (mapIterator == currentMapping->end())
                     {
@@ -367,33 +390,42 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
                         }
                     }
                 }
-
-                if (termsEqual(leftInfo, rightInfo))
-                {
-                    continue;
-                }
                 else
                 {
-                    leftModelsRight = false;
-                    break;
+                    if (termsEqual(leftInfo, rightInfo))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        leftModelsRight = false;
+                        break;
+                    }
                 }
             }
 
-            if (leftModelsRight)
+            if (leftModelsRight && !rightExistential)
             {
                 rightSatisfied = true;
                 break;
             }
+
+            if (rightExistential && !leftModelsRight && currentMapping != nullptr)
+            {
+                existentialMappings[existentialMappingIndex].pop_back();
+            }
         }
 
-        if (rightSatisfied)
-        {
-            satisfied[rightIndex] = 1;
-        }
+        if (rightExistential)
+            ++existentialMappingIndex;
         else
         {
-            isCompletelySatisfied = false;
+            if (rightSatisfied)
+                satisfied[rightIndex] = 1;
+            else
+                isCompletelySatisfied = false;
         }
+      
     }
 
     return isCompletelySatisfied;
@@ -442,7 +474,13 @@ bool checkConsistentExistentialDeep(const std::unordered_map<int64_t, TermInfo> 
 bool checkConsistentExistential(const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings)
 {
     if (mappings.size() <= 1)
-        return true;
+        return false;
+
+    for (auto &possibleMappings : mappings)
+    {
+        if (possibleMappings.size() == 0)
+            return false;
+    }
 
     for (const std::unordered_map<int64_t, TermInfo> &startMap : mappings[0])
     {

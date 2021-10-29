@@ -165,39 +165,50 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
-    satisfied.resize(ruleTo.getHeads().size());
+    satisfied.resize(ruleTo.getHeads().size(), 0);
+    prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
 
     bool toHeadSatisfied =
-        relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        && checkConsistentExistential(existentialMappings);
+        relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
             
+    if (toHeadSatisfied && ruleTo.isExistential())
+    {
+        toHeadSatisfied = checkConsistentExistential(existentialMappings);
+    }
+
     if (toHeadSatisfied)
         return false;
 
-    existentialMappings.clear();
+    prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
     satisfied.clear();
     satisfied.resize(ruleTo.getHeads().size(), 0);
 
-    bool alternativeMatchAlreadyPresent = 
-        (relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings, true)
-        || relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings))
-        && checkConsistentExistential(existentialMappings);
+    bool alternativeMatchAlreadyPresent = relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings, false, false);
+    alternativeMatchAlreadyPresent |= relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings, true, false);
+    alternativeMatchAlreadyPresent |= relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings, false, false);
+    alternativeMatchAlreadyPresent |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings, false, false);
+
+    if (alternativeMatchAlreadyPresent && ruleTo.isExistential())
+    {
+        alternativeMatchAlreadyPresent = checkConsistentExistential(existentialMappings);
+    }
 
     if (alternativeMatchAlreadyPresent)
         return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 
-    existentialMappings.clear();
+    prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
     satisfied.clear();
     satisfied.resize(ruleFrom.getHeads().size(), 0);
 
-    bool fromHeadSatisfied = 
-        (relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
-        || relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings, true)
-        || relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings)
-        || relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings))
-        && checkConsistentExistential(existentialMappings);
+    bool fromHeadSatisfied = relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+    fromHeadSatisfied |= relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings, true);
+    fromHeadSatisfied |= relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+    fromHeadSatisfied |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+
+    if (fromHeadSatisfied && ruleFrom.isExistential())
+    {
+        fromHeadSatisfied = checkConsistentExistential(existentialMappings);
+    }
 
     if (fromHeadSatisfied)
         return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
@@ -340,10 +351,7 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
         {
             for (size_t ruleTo : iteratorTo->second)
             {
-                if (ruleFrom == 0)
-                  int y = 0;
-
-                if (ruleFrom == 0 && ruleTo == 886)
+                if (ruleFrom == 0 && ruleTo == 754)
                     int x = 0;
 
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
@@ -358,8 +366,6 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
                 {
                     result.addEdge(ruleFrom, ruleTo);
                     resultTransposed.addEdge(ruleTo, ruleFrom);
-                
-                    break;
                 }
             }
         }

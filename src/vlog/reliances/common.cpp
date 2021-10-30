@@ -138,7 +138,7 @@ bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight)
         return true;
 
     if (termLeft.groupId == NOT_ASSIGNED && termRight.groupId == NOT_ASSIGNED
-        && termLeft.relation == termRight.relation)
+        && termLeft.termId == termRight.termID && termLeft.relation == termRight.relation)
         return true;
 
     return false;

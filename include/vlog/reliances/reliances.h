@@ -70,6 +70,8 @@ struct VariableAssignments
         variableToOffset = variableCountFrom;
     }
 
+    size_t getVariableToOffset() { return variableToOffset; }
+
     int64_t getGroupId(int32_t variableId, RelianceRuleRelation relation) const
     {
         if (relation == RelianceRuleRelation::From)

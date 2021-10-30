@@ -107,9 +107,9 @@ TermInfo getTermInfoModels(VTerm term, const VariableAssignments &assignments, R
     {
         result.type = TermInfo::Types::Existential;
 
-        if (alwaysDefaultAssignExistentials)
+        if (alwaysDefaultAssignExistentials) //they are different nulls then the own assigned during unification
         {
-            result.constant = (int32_t)term.getId();
+            result.constant = (int32_t)term.getId() - assignments.getVariableToOffset();
         }
         else
         {
@@ -138,7 +138,7 @@ bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight)
         return true;
 
     if (termLeft.groupId == NOT_ASSIGNED && termRight.groupId == NOT_ASSIGNED
-        && termLeft.termId == termRight.termID && termLeft.relation == termRight.relation)
+        && termLeft.termId == termRight.termId && termLeft.relation == termRight.relation)
         return true;
 
     return false;
@@ -473,7 +473,7 @@ bool checkConsistentExistentialDeep(const std::unordered_map<int64_t, TermInfo> 
 
 bool checkConsistentExistential(const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings)
 {
-    if (mappings.size() <= 1)
+    if (mappings.size() < 1)
         return false;
 
     for (auto &possibleMappings : mappings)

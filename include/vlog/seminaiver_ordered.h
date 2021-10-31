@@ -11,6 +11,26 @@
 #include <algorithm>
 #include <numeric>
 
+struct UnorderedGraph
+{
+    std::unordered_map<unsigned, std::unordered_set<unsigned>> edges;
+
+    void addEdge(unsigned from, unsigned to)
+    {
+        edges[from].insert(to);
+    }
+
+    void removeNode(unsigned node)
+    {
+        edges.erase(node);
+
+        for (auto nodes : edges)
+        {
+            nodes.second.erase(node);
+        }
+    }
+};
+
 class SemiNaiverOrdered: public SemiNaiver {
 public:
     struct PositiveGroup;
@@ -29,6 +49,7 @@ public:
         std::vector<RelianceRuleInfo*> positiveSuccessors, restraintSuccessors;
 
         RelianceRuleInfo(unsigned id, RuleExecutionDetails *details)
+            : id(id), ruleDetails(details)
         {
             for (RelianceRuleInfo *successor : restraintSuccessors)
             {
@@ -101,17 +122,12 @@ public:
             {
                 memberInfo->setInactive();
             }
-
-            for (PositiveGroup *successor : successors)
-            {
-                --successor->numActivePredecessors;
-                successor->setInactive();
-            }
         }
     };
 
     struct RestrainedGroup
     {
+        std::vector<PositiveGroup*> positiveGroups; 
         std::vector<RelianceRuleInfo*> restrainedMembers, unrestrainedMembers;
     };
 
@@ -140,11 +156,15 @@ public:
         PredId_t predIgnoreBlock = -1);
         
 private:
-    void fillOrder(const SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
-    void dfsUntil(const SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
-    RelianceGroupResult computeRelianceGroups(const SimpleGraph &graph, const SimpleGraph &graphTransposed);
+    template<typename GraphType>
+    void fillOrder(GraphType &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack);
+    template<typename GraphType>
+    void dfsUntil(GraphType &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup);
+    template<typename GraphType>
+    RelianceGroupResult computeRelianceGroups(GraphType &graph, GraphType &graphTransposed);
     void setActive(PositiveGroup *currentGroup);
     void sortRuleVectorById(std::vector<RelianceRuleInfo *> &infos);
+    std::vector<PositiveGroup> SemiNaiverOrdered::computePositiveGroups(std::vector<RelianceRuleInfo> &allRules, SimpleGraph &positiveGraph, RelianceGroupResult &groupsResult);
 
     void orderGroupExistentialLast(PositiveGroup *group);
     void orderGroupAverageRuntime(PositiveGroup *group);
@@ -154,11 +174,14 @@ private:
     // void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, const SimpleGraph &positiveGraph, const SimpleGraph &positiveGraphTransposed, const SimpleGraph &blockingGraphTransposed, const RelianceGroupResult &groupsResult, std::vector<PositiveGroup> &positiveGroups);
     void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, std::vector<RelianceRuleInfo> &outInfo, std::vector<RuleExecutionDetails> &outRuleDetails);
 
+    void updateGraph(UnorderedGraph &graph, UnorderedGraph &graphTransposed, PositiveGroup *group);
+    std::pair<UnorderedGraph, UnorderedGraph> combineGraphs(const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph);
+
     bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool fixpoint, unsigned long *timeout);
     // bool executeGroupBottomUp(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
     // bool executeGroupInOrder(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
     // bool SemiNaiverOrdered::executeGroupAverageRuntime(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
-    bool SemiNaiverOrdered::executeRestrainedGroup(RestrainedGroup &group, std::vector<StatIteration> &costRules, unsigned long *timeout);
+    PositiveGroup *SemiNaiverOrdered::executeRestrainedGroup(RestrainedGroup &group, std::vector<StatIteration> &costRules, unsigned long *timeout);
 };
 
 #endif

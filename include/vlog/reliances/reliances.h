@@ -70,7 +70,7 @@ struct VariableAssignments
         variableToOffset = variableCountFrom;
     }
 
-    size_t getVariableToOffset() { return variableToOffset; }
+    size_t getVariableToOffset() const { return variableToOffset; }
 
     int64_t getGroupId(int32_t variableId, RelianceRuleRelation relation) const
     {

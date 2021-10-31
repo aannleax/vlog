@@ -7,6 +7,8 @@
 #include <limits>
 #include <fstream>
 #include <string>
+#include <algorithm>
+#include <numeric>
 
 #define NOT_ASSIGNED std::numeric_limits<int64_t>::max()
 #define ASSIGNED (NOT_ASSIGNED - 1)
@@ -14,12 +16,19 @@
 struct SimpleGraph
 {
     std::vector<std::vector<size_t>> edges;
+    std::vector<unsigned> nodes;
+    unsigned numberOfInitialNodes;
 
     SimpleGraph() {};
 
     SimpleGraph(size_t nodeCount)
     {
+        numberOfInitialNodes = nodeCount;
+
         edges.resize(nodeCount);
+        nodes.resize(nodeCount);
+
+        std::iota(nodes.begin(), nodes.end(), 0);
     } 
 
     void addEdge(size_t from, size_t to)

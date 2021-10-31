@@ -18,14 +18,16 @@ SemiNaiverOrdered::SemiNaiverOrdered(EDBLayer &layer,
     std::cout << "Running constructor of SemiNaiverOrdered" << '\n';
 }
 
-template<typename GraphType>
-void SemiNaiverOrdered::fillOrder(GraphType &graph, unsigned node, 
-    std::vector<unsigned> &visited, stack<unsigned> &stack)
+void SemiNaiverOrdered::fillOrder(SimpleGraph &graph, unsigned node, 
+    std::vector<unsigned> &visited, stack<unsigned> &stack, std::vector<bool> *activeNodes)
 {
     visited[node] = 1;
   
     for(unsigned adjacentNode : graph.edges[node])
     {
+        if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
+            continue;
+
         if(visited[adjacentNode] == 0)
             fillOrder(graph, adjacentNode, visited, stack);
     }
@@ -33,42 +35,50 @@ void SemiNaiverOrdered::fillOrder(GraphType &graph, unsigned node,
     stack.push(node);
 }
 
-template<typename GraphType>
-void SemiNaiverOrdered::dfsUntil(GraphType &graph, unsigned node, 
-    std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup)
+void SemiNaiverOrdered::dfsUntil(SimpleGraph &graph, unsigned node, 
+    std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup,
+    std::vector<bool> *activeNodes)
 {
     visited[node] = 1;
     currentGroup.push_back(node);
 
     for(unsigned adjacentNode : graph.edges[node])
     {
+        if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
+            continue;
+
         if(visited[adjacentNode] == 0)
-            dfsUntil(graph, adjacentNode, visited, currentGroup);
+            dfsUntil(graph, adjacentNode, visited, currentGroup, activeNodes);
     }
 }
-template<typename GraphType>
+
 SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
-    GraphType &graph, GraphType &graphTransposed)
+    SimpleGraph &graph, SimpleGraph &graphTransposed,
+    std::vector<bool> *activeNodes)
 {
     RelianceGroupResult result;
-    result.assignments.resize(graph.edges.size(), 0);
+    result.assignments.resize(graph.numberOfInitialNodes, -1);
 
-    if (graph.edges.size() == 0)
+    if (graph.nodes.size() == 0)
         return result;
 
     std::stack<unsigned> nodeStack;
     std::vector<unsigned> visited;
-    visited.resize(graph.edges.size(), 0);
+    visited.resize(graph.numberOfInitialNodes, 0);
 
-    for (unsigned node = 0; node < graph.edges.size(); ++node)
+    for (unsigned node = 0; node < graph.numberOfInitialNodes; ++node)
     {
+        if (activeNodes != nullptr && !(*activeNodes)[node])
+            continue;
+
         if (visited[node] == 0)
-            fillOrder(graph, node, visited, nodeStack);
+            fillOrder(graph, node, visited, nodeStack, activeNodes);
     }
 
     std::fill(visited.begin(), visited.end(), 0);
 
     std::vector<unsigned> currentGroup;
+    bool minFound = false;
     while (!nodeStack.empty())
     {
         unsigned currentNode = nodeStack.top();
@@ -76,7 +86,7 @@ SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
   
         if (visited[currentNode] == 0)
         {
-            dfsUntil(graphTransposed, currentNode, visited, currentGroup);
+            dfsUntil(graphTransposed, currentNode, visited, currentGroup, activeNodes);
 
             if (currentGroup.size() > 0)
             {
@@ -86,6 +96,30 @@ SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
                 for (unsigned member : currentGroup)
                 {
                     result.assignments[member] = currentGroupIndex;
+                
+                    if (!minFound && activeNodes != nullptr)
+                    {
+                        bool hasPredeccessors = false; 
+                        for (unsigned pred : graphTransposed.edges[member])
+                        {
+                            if (!(*activeNodes)[pred])
+                              continue;
+
+                            if (std::find(currentGroup.begin(), currentGroup.end(), pred) == currentGroup.end())
+                            {
+                                hasPredeccessors = true;
+                                break;
+                            }
+                        }
+
+                        if (!hasPredeccessors)
+                        {
+                            result.minimumGroup = result.groups.size() - 1;
+                            minFound = true;
+                        }
+                    }
+                  
+                    // result.hasPredeccessors.push_back(hasPredeccessors);
                 }
 
                 currentGroup.clear();
@@ -710,22 +744,33 @@ std::vector<SemiNaiverOrdered::PositiveGroup> SemiNaiverOrdered::computePositive
     return result;
 }
 
-void SemiNaiverOrdered::updateGraph(UnorderedGraph &graph, UnorderedGraph &graphTransposed, PositiveGroup *group)
+void SemiNaiverOrdered::updateGraph(SimpleGraph &graph, SimpleGraph &graphTransposed, PositiveGroup *group, unsigned *numActiveGroups, std::vector<bool> &activeRules)
 {
-    if (group->isActive())
+    if (group->removed || group->isActive())
         return;
 
+    (*numActiveGroups)--;
     group->setInactive();
+    group->removed = true;
 
     for (RelianceRuleInfo *member : group->members)
     {
-        graph.removeNode(member->id);
-        graphTransposed.removeNode(member->id);
+        if (!activeRules[member->id])
+        {
+            std::cout << "Error" << std::endl;
+        }
+
+        activeRules[member->id] = false;
     }
 
     for (PositiveGroup *successorGroup : group->successors)
     {
-        updateGraph(graph, graphTransposed, successorGroup);
+      if (successorGroup->numActivePredecessors == 0)
+        std::cout << "Error" << std::endl;
+
+        --successorGroup->numActivePredecessors;
+
+        updateGraph(graph, graphTransposed, successorGroup, numActiveGroups, activeRules);
     }
 }
 
@@ -1025,14 +1070,14 @@ void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules)
     }
 }
 
-std::pair<UnorderedGraph, UnorderedGraph> SemiNaiverOrdered::combineGraphs(
+std::pair<SimpleGraph, SimpleGraph> SemiNaiverOrdered::combineGraphs(
     const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph)
 {
-    UnorderedGraph unionGraph, unionGraphTransposed;
+    SimpleGraph unionGraph(positiveGraph.nodes.size()), unionGraphTransposed(positiveGraph.nodes.size());
 
-    auto copyGraph = [] (const SimpleGraph &simple, UnorderedGraph &outUnion, UnorderedGraph &outUnionTransposed) -> void
+    auto copyGraph = [] (const SimpleGraph &simple, SimpleGraph &outUnion, SimpleGraph &outUnionTransposed) -> void
     {
-        for (unsigned fromNode = 0; fromNode < simple.edges.size(); ++fromNode)
+        for (unsigned fromNode = 0; fromNode < simple.nodes.size(); ++fromNode)
         {
             for (unsigned toNode : simple.edges[fromNode])
             {
@@ -1046,6 +1091,38 @@ std::pair<UnorderedGraph, UnorderedGraph> SemiNaiverOrdered::combineGraphs(
     copyGraph(restraintGraph, unionGraph, unionGraphTransposed);
     
     return std::make_pair(unionGraph, unionGraphTransposed);
+}
+
+SemiNaiverOrdered::RestrainedGroup SemiNaiverOrdered::computeRestrainedGroup(
+    std::vector<RelianceRuleInfo> &allRules, 
+    const std::vector<unsigned> &groupIndices)
+{
+    RestrainedGroup result;
+
+    std::unordered_set<PositiveGroup*> groupSet;
+
+    for (unsigned memberIndex : groupIndices)
+    {
+        RelianceRuleInfo *currentInfo = &allRules[0] + memberIndex;
+
+        groupSet.insert(currentInfo->positiveGroup);
+
+        if (currentInfo->numRestrains == 0)
+        {
+            result.unrestrainedMembers.push_back(currentInfo);
+        }
+        else
+        {
+            result.restrainedMembers.push_back(currentInfo);
+        }
+    }
+
+    for (PositiveGroup *group : groupSet)
+    {
+        result.positiveGroups.push_back(group);
+    }
+
+    return result;
 }
 
 void SemiNaiverOrdered::run(size_t lastExecution,
@@ -1064,16 +1141,11 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     this->iteration = iteration;
 
-    //std::vector<Rule> &allOriginalRules = program->getAllRules();
+    std::vector<Rule> &allOriginalRules = program->getAllRules();
     std::vector<Rule> allRules = program->getAllRules();
-    /*for (const Rule &currentRule : allOriginalRules)
-    {
-        splitIntoPieces(currentRule, allRules);
-    }*/
-
-    // for (const Rule &currentRule : allRules)
+    // for (const Rule &currentRule : allOriginalRules)
     // {
-    //     std::cout << currentRule.tostring(program, &layer) << std::endl;
+    //     splitIntoPieces(currentRule, allRules);
     // }
 
     std::cout << "#Rules: " << allRules.size() << '\n';
@@ -1081,39 +1153,12 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     std::chrono::system_clock::time_point relianceStart = std::chrono::system_clock::now();
     std::cout << "Computing positive reliances..." << '\n';
     std::pair<SimpleGraph, SimpleGraph> positiveGraphs = computePositiveReliances(allRules);
-    // std::pair<SimpleGraph, SimpleGraph> SimpleGraphs = DEBUGEveryIDBInOneGroup(allRules);
-
-    /*std::cout << "Positive reliances: " << '\n';
-    for (unsigned from = 0; from < SimpleGraphs.first.edges.size(); ++from)
-    {
-        for (unsigned to :  SimpleGraphs.first.edges[from])
-        {
-            std::cout << "positive reliance: " << from << " -> " << to << '\n';
-        }
-    }*/
-
-    // unsigned fakeReliances = DEBUGcountFakePositiveReliances(allRules, SimpleGraphs.first);
-    // std::cout << "There are " << fakeReliances << " fake reliances." << '\n';
-
+   
     positiveGraphs.first.saveCSV("positive_V2.csv");
 
     std::cout << "Computing positive reliance groups..." << '\n';
     RelianceGroupResult positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
     std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
-
-    /*for (vector<unsigned> &group : relianceGroups.groups)
-    {
-        if (group.size() < 2)
-            continue;
-
-        for (unsigned member : group)
-        {
-            std::cout << allRules[member].tostring(program, &layer) << '\n';
-        }
-        std::cout << "------------------------" << '\n';
-    }
-
-    std::cout << "Found " << relianceGroups.groups.size() << " groups." << '\n';*/
 
     std::vector<StatIteration> costRules;
 
@@ -1125,20 +1170,6 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     std::cout << "Restraint computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
 
     restrainingGraphs.first.saveCSV("blocking_V2.csv");
-
-    // for (unsigned blockedIndex = 0; blockedIndex < blockingGraphs.second.edges.size(); ++blockedIndex)
-    // {
-    //     const std::vector<unsigned> blockingNodes = blockingGraphs.second.edges[blockedIndex];
-
-    //     if (blockingNodes.size() > 0)
-    //         std::cout << allRules[blockedIndex].tostring(program, &layer) << '\n';
-        
-    //     for (unsigned blockingNode : blockingNodes)
-    //     {
-    //         std::cout << '\t' << allRules[blockingNode].tostring(program, &layer) << '\n';
-    //     }
-    // }
-    // std::cout << '\n';
 
 #if RUNMAT
     std::vector<RuleExecutionDetails> allRuleDetails;
@@ -1165,7 +1196,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         currentInfo.initialize(currentPositiveGroup, positiveSuccessors, restraintSuccessors);
     }
 
-    std::pair<UnorderedGraph, UnorderedGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
+    std::pair<SimpleGraph, SimpleGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
 
     for (RelianceRuleInfo &currentInfo : allRuleInfos)
     {
@@ -1175,19 +1206,47 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     }
 
-    for (unsigned dummyNode = 0; dummyNode < allRuleInfos.size(); ++dummyNode)
-    {
-        auto x = unionGraphs.first.edges[dummyNode];
-        auto y = unionGraphs.second.edges[dummyNode];
-    }
+    unsigned numActiveGroups = positiveGroups.size();
+    std::vector<bool> activeRules;
+    activeRules.resize(allRuleInfos.size(), true);
 
     for (PositiveGroup &currentGroup : positiveGroups)
     {
-        updateGraph(unionGraphs.first, unionGraphs.second, &currentGroup);
+        updateGraph(unionGraphs.first, unionGraphs.second, &currentGroup, &numActiveGroups, activeRules);
     }
 
-    RelianceGroupResult combinedGroupsResult = computeRelianceGroups(unionGraphs.first, unionGraphs.second);    
-    std::cout << "Number of groups: " << combinedGroupsResult.groups.size() << std::endl;
+    // RelianceGroupResult combinedGroupsResult = computeRelianceGroups(unionGraphs.first, unionGraphs.second, &activeRules);    
+    // RestrainedGroup currentRestrainedGroup = computeRestrainedGroup(allRuleInfos, combinedGroupsResult.groups[combinedGroupsResult.minimumGroup]);
+   
+    while (numActiveGroups > 0)
+    {
+      if (numActiveGroups == 737)
+        int x = 0;
+
+        RelianceGroupResult combinedGroupsResult = computeRelianceGroups(unionGraphs.first, unionGraphs.second, &activeRules);    
+        RestrainedGroup currentRestrainedGroup = computeRestrainedGroup(allRuleInfos, combinedGroupsResult.groups[combinedGroupsResult.minimumGroup]);
+   
+        // std::cout << "Groups: " << combinedGroupsResult.groups.size() << '\n';
+
+        PositiveGroup *nextInactive = executeRestrainedGroup(currentRestrainedGroup, costRules, timeout);
+    
+        if (nextInactive != nullptr)
+        {
+            updateGraph(unionGraphs.first, unionGraphs.second, nextInactive, &numActiveGroups, activeRules);
+        }
+        else
+        {
+            for (PositiveGroup *inactiveGroup : currentRestrainedGroup.positiveGroups)
+            {
+                if (inactiveGroup->isActive())
+                    continue;
+
+                updateGraph(unionGraphs.first, unionGraphs.second, inactiveGroup, &numActiveGroups, activeRules);
+            }
+        }
+    } 
+
+    // std::cout << "Number of groups: " << combinedGroupsResult.groups.size() << std::endl;
 
     // std::vector<PositiveGroup> positiveGroups;
     // prepare(lastExecution, singleRule, allRules, SimpleGraphs.first, SimpleGraphs.second, blockingGraphs.second, relianceGroups, positiveGroups);

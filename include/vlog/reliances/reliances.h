@@ -174,48 +174,6 @@ private:
     }
 };
 
-// struct RelianceTermCompatible
-// {
-//     enum Types
-//     {
-//         Incompatible,
-//         AddVariableLeftToGroup,
-//         AddVariableRightToGroup,
-//         MergeGroups,
-//         NewGroup,
-//         GroupSetConstant
-//     } type = Types::Incompatible;
-
-//     union
-//     {
-//         struct Add
-//         {
-//             int64_t variableId;
-//             int64_t groupId;   
-//         } addToGroup;
-
-//         struct Merge
-//         {
-//             int64_t groupLeftId;
-//             int64_t groupRightId;
-//         } mergeGroups;
-
-//         struct New
-//         {
-//             int64_t variableLeftId;
-//             int64_t variableRightId;
-//         } newGroup;
-
-//         struct Set
-//         {
-//             int64_t groupId;
-//             int64_t placeHolder;
-//         } setConstant;
-//     };
-
-//      int64_t constant;
-// };
-
 struct TermInfo
 {
     enum Types

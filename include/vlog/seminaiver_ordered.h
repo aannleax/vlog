@@ -11,39 +11,13 @@
 #include <algorithm>
 #include <numeric>
 
-// struct SimpleGraph
-// {
-//     std::unordered_map<unsigned, std::unordered_set<unsigned>> edges;
-//     std::unordered_set<unsigned> nodes;
-
-//     unsigned numberOfInitialNodes;
-
-//     SimpleGraph(unsigned nodeCount)
-//     {
-//         numberOfInitialNodes = nodeCount;
-
-//         for (unsigned node = 0; node < nodeCount; ++node)
-//         {
-//             nodes.insert(node);
-//         }
-//     }
-
-//     void addEdge(unsigned from, unsigned to)
-//     {
-//         edges[from].insert(to);
-//     }
-
-//     void removeNode(unsigned node)
-//     {
-//         nodes.erase(node);
-//         edges.erase(node);
-
-//         for (auto iterator : edges)
-//         {
-//             iterator.second.erase(node);
-//         }
-//     }
-// };
+enum SemiNaiverOrderedType : int32_t
+{
+    Default = 0,
+    PieceDecomposed = 1,
+    Dynamic = 2,
+    UnrestrainedFirst = 4
+};
 
 class SemiNaiverOrdered: public SemiNaiver {
 public:
@@ -163,7 +137,8 @@ public:
         int nthreads, 
         bool shuffleRules,
         bool ignoreExistentialRule,
-        Program *RMFC_check = NULL);
+        Program *RMFC_check = NULL,
+        SemiNaiverOrderedType strategy = SemiNaiverOrderedType::Default);
 
     VLIBEXP void run(size_t lastIteration,
         size_t iteration,
@@ -173,6 +148,8 @@ public:
         PredId_t predIgnoreBlock = -1);
         
 private:
+    SemiNaiverOrderedType strategy;
+
     void fillOrder(SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, stack<unsigned> &stack,std::vector<bool> *activeNodes = nullptr);
     void dfsUntil(SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup, std::vector<bool> *activeNodes = nullptr);
     RelianceGroupResult computeRelianceGroups(SimpleGraph &graph, SimpleGraph &graphTransposed, std::vector<bool> *activeNodes = nullptr);
@@ -196,7 +173,8 @@ private:
     // bool executeGroupBottomUp(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
     // bool executeGroupInOrder(std::vector<RuleExecutionDetails> &ruleset, std::vector<unsigned> &rulesetOrder, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
     // bool SemiNaiverOrdered::executeGroupAverageRuntime(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool blocked, unsigned long *timeout);
-    PositiveGroup *SemiNaiverOrdered::executeRestrainedGroup(RestrainedGroup &group, std::vector<StatIteration> &costRules, unsigned long *timeout);
+    PositiveGroup *SemiNaiverOrdered::executeGroupUnrestrainedFirst(RestrainedGroup &group, std::vector<StatIteration> &costRules, unsigned long *timeout, SemiNaiverOrderedType strategy);
+    PositiveGroup *SemiNaiverOrdered::executeGroupByPositiveGroups(RestrainedGroup &group, std::vector<StatIteration> &costRules, unsigned long *timeout);
 };
 
 #endif

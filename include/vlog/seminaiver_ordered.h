@@ -36,6 +36,9 @@ public:
         PositiveGroup *positiveGroup;
         std::vector<RelianceRuleInfo*> positiveSuccessors, restraintSuccessors;
 
+        bool existentialRule; // contains at least one existential variable in heads
+        bool complexRule; // contains at least two body atoms
+
         RelianceRuleInfo(unsigned id, RuleExecutionDetails *details)
             : id(id), ruleDetails(details)
         {

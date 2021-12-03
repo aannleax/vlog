@@ -93,24 +93,26 @@ InmemoryTable::InmemoryTable(std::string repository, std::string tablename,
     std::string tablefile = repository + "/" + tablename + ".csv";
     std::string gz = tablefile + ".gz";
     istream *ifs = NULL;
-    if (Utils::exists(gz)) {
+    /*if (Utils::exists(gz)) {
         ifs = new zstr::ifstream(gz);
         if (ifs->fail()) {
             std::string e = "While importing data for predicate \"" + layer->getPredName(predid) + "\": could not open file " + gz;
             LOG(ERRORL) << e;
             throw (e);
         }
-    } else if (Utils::exists(tablefile)) {
+    } else if (Utils::exists(tablefile)) {*/
         ifs = new std::ifstream(tablefile, ios_base::in | ios_base::binary);
         if (ifs->fail()) {
             std::string e = "While importing data for predicate \"" + layer->getPredName(predid) + "\": could not open file " + tablefile;
             LOG(ERRORL) << e;
             throw (e);
         }
-    }
+    //}
     if (ifs != NULL) {
         LOG(DEBUGL) << "Reading " << tablefile;
+        size_t longLineNumber = 0;
         while (! ifs->eof()) {
+            ++longLineNumber;
             std::vector<std::string> row = readRow(*ifs);
             Term_t rowc[256];
             if (arity == 0) {

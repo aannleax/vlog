@@ -18,8 +18,15 @@
 #include <sstream>
 #include <unordered_set>
 
+unsigned STATcurrentNumberOfGroups = 0;
+std::vector<unsigned> STATnumberOfGroups;
+
 unsigned executeRuleCount = 0;
 unsigned executeRuleTrueCount = 0;
+
+unsigned restrainedRuleCount = 0;
+unsigned restrainedRuleExecutedCount = 0;
+bool isRestrained = false;
 
 void SemiNaiver::createGraphRuleDependency(std::vector<int> &nodes,
         std::vector<std::pair<int, int>> &edges) {
@@ -1200,7 +1207,14 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
         std::vector<ResultJoinProcessor*> *finalResultContainer) {
     Rule rule = ruleDetails.rule;
 
+    STATnumberOfGroups.push_back(STATcurrentNumberOfGroups);
+
     ++executeRuleCount;
+    if (isRestrained)
+    {
+        ++restrainedRuleExecutedCount;
+        isRestrained = false;
+    }
 
 #ifdef WEBINTERFACE
     // Cannot run multithreaded in this case.

@@ -22,8 +22,12 @@ bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals,
 
             if ((int32_t)currentTerm.getId() < 0)
             {
-                if (assignments.getGroupId((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED
-                    || assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED)
+                // if (assignments.getGroupId((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED
+                //     && assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED)
+                //     return false;
+
+                int64_t assignedConstant = assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To);
+                if (assignedConstant != NOT_ASSIGNED && assignedConstant < 0)
                     return false;
             }                
         }
@@ -239,6 +243,7 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
         }
     }
 
+    unsigned numCalls = 0;
     std::unordered_set<uint64_t> proccesedPairs;
     for (auto iteratorFrom : headFromMap)
     {
@@ -251,9 +256,10 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
         {
             for (size_t ruleTo : iteratorTo->second)
             {
-                if (ruleFrom == 2172 && ruleTo == 2128)
-                    int x = 0;
-
+        // for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+        // {
+        //     for (size_t ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+        //     {
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;
@@ -262,6 +268,7 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
                 unsigned variableCountFrom = variableCounts[ruleFrom];
                 unsigned variableCountTo = variableCounts[ruleTo];
 
+                numCalls++;
                 if (restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
                 {
                     result.addEdge(ruleFrom, ruleTo);
@@ -270,6 +277,8 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &
             }
         }
     }
+
+    std::cout << "Res Calls: " << numCalls << '\n';
 
     return std::make_pair(result, resultTransposed);
 }

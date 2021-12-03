@@ -233,6 +233,7 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &
         }
     }
 
+    unsigned numCalls = 0;
     std::unordered_set<uint64_t> proccesedPairs;
     for (PredId_t currentPredicate : allPredicates)
     {
@@ -246,6 +247,10 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &
         {
             for (size_t ruleTo : toIterator->second)
             {
+        // for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+        // {
+        //     for (size_t ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+        //     {
                 uint64_t hash = ruleFrom * rules.size() + ruleTo;
                 if (proccesedPairs.find(hash) != proccesedPairs.end())
                     continue;
@@ -254,6 +259,7 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &
                 unsigned variableCountFrom = variableCounts[ruleFrom];
                 unsigned variableCountTo = variableCounts[ruleTo];
                 
+                ++numCalls;
                 if (positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
                 {
                     result.addEdge(ruleFrom, ruleTo);
@@ -262,6 +268,8 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &
             }
         }
     }
+
+    std::cout << "Pos Calls: " << numCalls << '\n';
 
     return std::make_pair(result, resultTransposed);
 }

@@ -208,8 +208,18 @@ SemiNaiverOrdered::PositiveGroup *SemiNaiverOrdered::executeGroupUnrestrainedFir
             continue;
         }
 
+        if (currentRuleInfo.numRestrains > 0)
+        {
+            isRestrained = true;
+        }
+
         std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
         bool response = executeRule(*currentRuleInfo.ruleDetails, iteration, 0, NULL);
+
+        if (response && currentRuleInfo.numRestrains > 0)
+        {
+            ++restrainedRuleCount;
+        }
 
         if (timeout != NULL && *timeout != 0) 
         {
@@ -284,8 +294,18 @@ SemiNaiverOrdered::PositiveGroup *SemiNaiverOrdered::executeGroupByPositiveGroup
             RelianceRuleInfo &currentRuleInfo = *currentGroup->members[currentRuleIndex];
             currentRuleIndex = (currentRuleIndex + 1) % currentGroup->members.size();
 
+            if (currentRuleInfo.numRestrains > 0)
+            {
+                isRestrained = true;
+            }
+
             std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
             bool response = executeRule(*currentRuleInfo.ruleDetails, iteration, 0, NULL);
+
+            if (response && currentRuleInfo.numRestrains > 0)
+            {
+                ++restrainedRuleCount;
+            }    
 
             if (timeout != NULL && *timeout != 0) 
             {
@@ -551,6 +571,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     listDerivations.clear();
 
     strategy = SemiNaiverOrderedType(SemiNaiverOrderedType::Default | SemiNaiverOrderedType::Dynamic);
+    // strategy = SemiNaiverOrderedType(SemiNaiverOrderedType::Default | SemiNaiverOrderedType::Dynamic | SemiNaiverOrderedType::UnrestrainedFirst);
     // strategy = SemiNaiverOrderedType::PieceDecomposed;
     // strategy = SemiNaiverOrderedType::UnrestrainedFirst | SemiNaiverOrderedType::Dynamic;
     // strategy = SemiNaiverOrderedType::UnrestrainedFirst;
@@ -576,20 +597,20 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     std::cout << "Computing positive reliances..." << '\n';
     std::pair<SimpleGraph, SimpleGraph> positiveGraphs = computePositiveReliances(allRules);
    
-    positiveGraphs.first.saveCSV("positive_V2.csv");
+    // positiveGraphs.first.saveCSV("positive_final.csv");
 
     std::cout << "Computing positive reliance groups..." << '\n';
     RelianceGroupResult positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
-    std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
+    std::cout << "Reliance computation took " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0 << '\n';
 
     std::vector<StatIteration> costRules;
 
     std::cout << "Computing restraint reliances..." << '\n';
     relianceStart = std::chrono::system_clock::now();
     std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = computeRestrainReliances(allRules);
-    std::cout << "Restraint computation took " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - relianceStart).count() << '\n';
+    std::cout << "Restraint computation took " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0 << '\n';
 
-    restrainingGraphs.first.saveCSV("blocking_V2.csv");
+    // restrainingGraphs.first.saveCSV("blocking_final.csv");
 
     std::vector<RuleExecutionDetails> allRuleDetails;
     std::vector<RelianceRuleInfo> allRuleInfos;
@@ -625,6 +646,83 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     }
 
+    //Stats
+    unsigned numEDBRules = 0, numIDBRules = 0;
+    unsigned numExTriggerComplex = 0, numExRestraintEx = 0;
+    unsigned numDlRestraintEx = 0;
+    unsigned numResInOrder = 0, numResOutOrder = 0;
+    unsigned numComplexPred = 0, numComplexRules = 0;
+    bool coreStratified = true;
+    
+    for (RelianceRuleInfo &currentInfo : allRuleInfos)
+    {
+        if (currentInfo.ruleDetails->nIDBs == 0)
+        {
+            ++numEDBRules;
+        }
+        else
+        {
+            ++numIDBRules;
+        }
+
+        const Rule &currentRule = currentInfo.ruleDetails->rule;
+        currentInfo.existentialRule = currentRule.isExistential();
+        currentInfo.complexRule = currentRule.getBody().size() > 1 || currentInfo.existentialRule;
+    }
+
+    for (unsigned fromRule = 0; fromRule < positiveGraphs.first.numberOfInitialNodes; ++fromRule)
+    {
+        for (unsigned toRule : positiveGraphs.first.edges[fromRule])
+        {
+            if (allRuleInfos[fromRule].existentialRule 
+                && allRuleInfos[toRule].complexRule)
+            {
+                ++numExTriggerComplex;
+            }
+        }    
+    }
+
+    for (unsigned fromRule = 0; fromRule < restrainingGraphs.first.numberOfInitialNodes; ++fromRule)
+    {
+        for (unsigned toRule : restrainingGraphs.first.edges[fromRule])
+        {
+            if (allRuleInfos[fromRule].existentialRule 
+                && allRuleInfos[toRule].existentialRule)
+            {
+                ++numExRestraintEx;
+            }
+
+            if (!allRuleInfos[fromRule].existentialRule 
+                && allRuleInfos[toRule].existentialRule)
+            {
+                ++numDlRestraintEx;   
+            }
+
+            if (allRuleInfos[fromRule].id < allRuleInfos[toRule].id)
+            {
+                ++numResInOrder;
+            }
+            if (allRuleInfos[fromRule].id > allRuleInfos[toRule].id)
+            {
+                ++numResOutOrder;
+            }
+        }
+    }
+
+    for (unsigned fromRule = 0; fromRule < positiveGraphs.second.numberOfInitialNodes; ++fromRule)
+    {
+        if (allRuleInfos[fromRule].complexRule)
+            ++numComplexRules;
+
+        for (unsigned toRule : positiveGraphs.second.edges[fromRule])
+        {
+            //from = succ, to = pred
+
+            if (allRuleInfos[fromRule].complexRule)
+                ++numComplexPred;
+        }
+    }
+
     unsigned numActiveGroups = positiveGroups.size();
     std::vector<bool> activeRules;
     activeRules.resize(allRuleInfos.size(), true);
@@ -636,8 +734,29 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     RelianceGroupResult staticRestrainedGroups;
     size_t currentStaticGroupIndex = 0;
-    if ((strategy & SemiNaiverOrderedType::Dynamic) == 0)
-        staticRestrainedGroups = computeRelianceGroups(unionGraphs.first, unionGraphs.second, &activeRules);
+    // if ((strategy & SemiNaiverOrderedType::Dynamic) == 0)
+    staticRestrainedGroups = computeRelianceGroups(unionGraphs.first, unionGraphs.second, &activeRules);
+    
+    for (auto &group : staticRestrainedGroups.groups)
+    {
+        for (unsigned ruleIndex : group)
+        {
+            for (unsigned restrainedRule : restrainingGraphs.first.edges[ruleIndex])
+            {
+                if (std::find(group.begin(), group.end(), restrainedRule) != group.end())
+                {
+                    coreStratified = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    std::cout << "EDB: " << numEDBRules << ", IDB: " << numIDBRules << '\n';
+    std::cout << "ExTriggerComplex: " << numExTriggerComplex << ", ExRestrainEx: " << numExRestraintEx << ", DlRestrainEx: " << numDlRestraintEx << '\n';
+    std::cout << "ResInOrder: " << numResInOrder << ", ResOutOrder: " << numResOutOrder << '\n';
+    std::cout << "ComplexRules: " << numComplexRules << ", ComplexPred: " << numComplexPred << ", Ratio: " << (double)numComplexPred / (double)numComplexRules << '\n';
+    std::cout << "Core-Stratfied: " << ((coreStratified) ? "yes" : "no") << '\n';
 
     while (numActiveGroups > 0)
     {
@@ -645,13 +764,21 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         if ((strategy & SemiNaiverOrderedType::Dynamic) > 0)
             dynamicRestrainedGroups = computeRelianceGroups(unionGraphs.first, unionGraphs.second, &activeRules);    
         
+        unsigned maxGroupSize = 0;
+        for (const auto &group : dynamicRestrainedGroups.groups)
+        {
+            if (group.size() > maxGroupSize)
+                maxGroupSize = group.size();
+        }
+
+        STATcurrentNumberOfGroups = maxGroupSize; //dynamicRestrainedGroups.groups.size();
 
         RestrainedGroup currentRestrainedGroup = 
             ((strategy & SemiNaiverOrderedType::Dynamic) > 0) ?
             computeRestrainedGroup(allRuleInfos, dynamicRestrainedGroups.groups[dynamicRestrainedGroups.minimumGroup]) :
             computeRestrainedGroup(allRuleInfos, staticRestrainedGroups.groups[currentStaticGroupIndex++]);
    
-        // std::cout << "Groups: " << combinedGroupsResult.groups.size() << '\n';
+        // std::cout << "Groups: " << dynamicRestrainedGroups.groups.size() << '\n';
 
         PositiveGroup *nextInactive;
         if ((strategy & SemiNaiverOrderedType::UnrestrainedFirst) > 0)
@@ -661,6 +788,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         else
         {
             nextInactive = executeGroupByPositiveGroups(currentRestrainedGroup, costRules, timeout);
+            // std::cout << "Positive first" << std::endl;
         }
 
         if (nextInactive != nullptr)
@@ -680,6 +808,14 @@ void SemiNaiverOrdered::run(size_t lastExecution,
     } 
 
     std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << '\n';
+    std::cout << "Restrained picked: " << restrainedRuleExecutedCount << '\n';
+    std::cout << "Restrained true: " << restrainedRuleCount << '\n';
+
+    std::cout << '\n';
+    for (unsigned statIndex = 0; statIndex < STATnumberOfGroups.size(); ++statIndex)
+    {
+        std::cout << "(" << statIndex << "," << STATnumberOfGroups[statIndex] << ")";
+    }
 
     this->running = false;
 }

@@ -57,6 +57,7 @@ file(GLOB vlog_SRC
     "src/vlog/cycles/*.cpp"
     "src/vlog/ml/*.cpp"
     "src/vlog/deps/*.cpp"
+    "src/vlog/reliances/*.cpp"
     "src/launcher/vloglayer.cpp"
     "src/launcher/vlogscan.cpp"
     )

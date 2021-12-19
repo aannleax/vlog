@@ -191,7 +191,7 @@ bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
 }
 
 
-std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules)
 {
     SimpleGraph result(rules.size()), resultTransposed(rules.size());
     

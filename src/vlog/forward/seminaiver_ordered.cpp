@@ -558,7 +558,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     this->iteration = iteration;
 
-    std::vector<Rule> &allOriginalRules = program->getAllRules();
+    const std::vector<Rule> &allOriginalRules = program->getAllRules();
 
     std::vector<Rule> allPieceDecomposedRules;
     if ((strategy & SemiNaiverOrderedType::PieceDecomposed) > 0)
@@ -569,7 +569,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     }
 
-    std::vector<Rule> &allRules = ((strategy & SemiNaiverOrderedType::PieceDecomposed) > 0) ? allPieceDecomposedRules : allOriginalRules;
+    const std::vector<Rule> &allRules = ((strategy & SemiNaiverOrderedType::PieceDecomposed) > 0) ? allPieceDecomposedRules : allOriginalRules;
     
     std::cout << "#Rules: " << allRules.size() << '\n';
 

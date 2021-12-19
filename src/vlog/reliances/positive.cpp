@@ -177,7 +177,7 @@ bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
     return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
 }
 
-std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules)
 {
     SimpleGraph result(rules.size()), resultTransposed(rules.size());
     

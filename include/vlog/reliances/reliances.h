@@ -205,8 +205,8 @@ Rule markExistentialVariables(const Rule &rule);
 void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings);
 
 // For outside
-std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(std::vector<Rule> &rules);
-std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(std::vector<Rule> &rules);
+std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules);
+std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules);
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const SimpleGraph &positiveGraph);
 
 #endif

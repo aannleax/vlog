@@ -18,16 +18,6 @@
 #include <sstream>
 #include <unordered_set>
 
-unsigned STATcurrentNumberOfGroups = 0;
-std::vector<unsigned> STATnumberOfGroups;
-
-unsigned executeRuleCount = 0;
-unsigned executeRuleTrueCount = 0;
-
-unsigned restrainedRuleCount = 0;
-unsigned restrainedRuleExecutedCount = 0;
-bool isRestrained = false;
-
 void SemiNaiver::createGraphRuleDependency(std::vector<int> &nodes,
         std::vector<std::pair<int, int>> &edges) {
     //Add the nodes and edges
@@ -415,7 +405,7 @@ void SemiNaiver::run(size_t lastExecution, size_t it, unsigned long *timeout,
         executeRules(allEDBRules, emptyRuleset, allIDBRules, emptyExtIDBRules, costRules, timeout);
     }
 
-    std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << std::endl;
+    std::cout << "Iterations: " << this->iteration << std::endl;
 
     running = false;
     LOG(DEBUGL) << "Finished process. Iterations=" << iteration;
@@ -1207,15 +1197,6 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
         std::vector<ResultJoinProcessor*> *finalResultContainer) {
     Rule rule = ruleDetails.rule;
 
-    STATnumberOfGroups.push_back(STATcurrentNumberOfGroups);
-
-    ++executeRuleCount;
-    if (isRestrained)
-    {
-        ++restrainedRuleExecutedCount;
-        isRestrained = false;
-    }
-
 #ifdef WEBINTERFACE
     // Cannot run multithreaded in this case.
     currentRule = rule.tostring(program, &layer);
@@ -1538,9 +1519,6 @@ bool SemiNaiver::executeRule(RuleExecutionDetails &ruleDetails,
         << ", join " << durationJoin.count() * 1000
         << "ms, consolidation " << durationConsolidation.count() * 1000
         << "ms, retrieving first atom " << durationFirstAtom.count() * 1000 << "ms.";
-
-    if (prodDer)
-        ++executeRuleTrueCount;
 
     std::string trueFalseString = prodDer ? "true" : "false";
     //std::cout << "Executed rule " << ruleDetails.rule.getId() << ": " << trueFalseString << '\n';

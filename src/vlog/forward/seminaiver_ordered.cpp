@@ -22,7 +22,7 @@ SemiNaiverOrdered::SemiNaiverOrdered(EDBLayer &layer,
 }
 
 void SemiNaiverOrdered::fillOrder(SimpleGraph &graph, unsigned node, 
-    std::vector<unsigned> &visited, stack<unsigned> &stack, std::vector<bool> *activeNodes)
+    std::vector<unsigned> &visited, std::stack<unsigned> &stack, std::vector<bool> *activeNodes)
 {
     visited[node] = 1;
   
@@ -208,18 +208,8 @@ SemiNaiverOrdered::PositiveGroup *SemiNaiverOrdered::executeGroupUnrestrainedFir
             continue;
         }
 
-        if (currentRuleInfo.numRestrains > 0)
-        {
-            isRestrained = true;
-        }
-
         std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
         bool response = executeRule(*currentRuleInfo.ruleDetails, iteration, 0, NULL);
-
-        if (response && currentRuleInfo.numRestrains > 0)
-        {
-            ++restrainedRuleCount;
-        }
 
         if (timeout != NULL && *timeout != 0) 
         {
@@ -294,18 +284,8 @@ SemiNaiverOrdered::PositiveGroup *SemiNaiverOrdered::executeGroupByPositiveGroup
             RelianceRuleInfo &currentRuleInfo = *currentGroup->members[currentRuleIndex];
             currentRuleIndex = (currentRuleIndex + 1) % currentGroup->members.size();
 
-            if (currentRuleInfo.numRestrains > 0)
-            {
-                isRestrained = true;
-            }
-
             std::chrono::system_clock::time_point iterationStart = std::chrono::system_clock::now();
             bool response = executeRule(*currentRuleInfo.ruleDetails, iteration, 0, NULL);
-
-            if (response && currentRuleInfo.numRestrains > 0)
-            {
-                ++restrainedRuleCount;
-            }    
 
             if (timeout != NULL && *timeout != 0) 
             {
@@ -764,15 +744,6 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         if ((strategy & SemiNaiverOrderedType::Dynamic) > 0)
             dynamicRestrainedGroups = computeRelianceGroups(unionGraphs.first, unionGraphs.second, &activeRules);    
         
-        unsigned maxGroupSize = 0;
-        for (const auto &group : dynamicRestrainedGroups.groups)
-        {
-            if (group.size() > maxGroupSize)
-                maxGroupSize = group.size();
-        }
-
-        STATcurrentNumberOfGroups = maxGroupSize; //dynamicRestrainedGroups.groups.size();
-
         RestrainedGroup currentRestrainedGroup = 
             ((strategy & SemiNaiverOrderedType::Dynamic) > 0) ?
             computeRestrainedGroup(allRuleInfos, dynamicRestrainedGroups.groups[dynamicRestrainedGroups.minimumGroup]) :
@@ -807,15 +778,7 @@ void SemiNaiverOrdered::run(size_t lastExecution,
         }
     } 
 
-    std::cout << "Iterations: " << this->iteration << ", ExecuteRule Calls: " << executeRuleCount << ", true: " << executeRuleTrueCount << '\n';
-    std::cout << "Restrained picked: " << restrainedRuleExecutedCount << '\n';
-    std::cout << "Restrained true: " << restrainedRuleCount << '\n';
-
-    std::cout << '\n';
-    for (unsigned statIndex = 0; statIndex < STATnumberOfGroups.size(); ++statIndex)
-    {
-        std::cout << "(" << statIndex << "," << STATnumberOfGroups[statIndex] << ")";
-    }
+    std::cout << "Iterations: " << this->iteration << std::endl;
 
     this->running = false;
 }

@@ -707,7 +707,7 @@ void launchFullMat(int argc,
 void launchRelianceComputation(ProgramArgs &vm) {
     std::string pathRules = vm["rule"].as<string>();
     bool pieceDecomposition = vm["piece"].as<bool>();
-    int32_t strategy = vm["start"].as<int32_t>();
+    int32_t strategy = vm["strat"].as<int32_t>();
 
     experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy);
 }

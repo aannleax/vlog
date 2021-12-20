@@ -123,14 +123,6 @@ public:
         std::vector<RelianceRuleInfo*> restrainedMembers, unrestrainedMembers;
     };
 
-    struct RelianceGroupResult
-    {
-        std::vector<std::vector<unsigned>> groups;
-        std::vector<unsigned> assignments;
-        // std::vector<bool> hasPredeccessors;
-        size_t minimumGroup;
-    };
-
     VLIBEXP SemiNaiverOrdered(EDBLayer &layer,
         Program *program, 
         bool opt_intersect,
@@ -153,9 +145,6 @@ public:
 private:
     SemiNaiverOrderedType strategy;
 
-    void fillOrder(SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, std::stack<unsigned> &stack, std::vector<bool> *activeNodes = nullptr);
-    void dfsUntil(SimpleGraph &graph, unsigned node, std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup, std::vector<bool> *activeNodes = nullptr);
-    RelianceGroupResult computeRelianceGroups(SimpleGraph &graph, SimpleGraph &graphTransposed, std::vector<bool> *activeNodes = nullptr);
     void setActive(PositiveGroup *currentGroup);
     void sortRuleVectorById(std::vector<RelianceRuleInfo *> &infos);
     std::vector<PositiveGroup> computePositiveGroups(std::vector<RelianceRuleInfo> &allRules, SimpleGraph &positiveGraph, RelianceGroupResult &groupsResult);
@@ -169,7 +158,6 @@ private:
     void prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules, std::vector<RelianceRuleInfo> &outInfo, std::vector<RuleExecutionDetails> &outRuleDetails);
 
     void updateGraph(SimpleGraph &graph, SimpleGraph &graphTransposed, PositiveGroup *group, unsigned *numActiveGroups, std::vector<bool> &activeRules);
-    std::pair<SimpleGraph, SimpleGraph> combineGraphs(const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph);
     RestrainedGroup computeRestrainedGroup(std::vector<RelianceRuleInfo> &allRules, const std::vector<unsigned> &groupIndices);
 
     bool executeGroup(std::vector<RuleExecutionDetails> &ruleset, std::vector<StatIteration> &costRules, bool fixpoint, unsigned long *timeout);

@@ -9,6 +9,7 @@
 #include <string>
 #include <algorithm>
 #include <numeric>
+#include <stack>
 
 #define NOT_ASSIGNED std::numeric_limits<int64_t>::max()
 #define ASSIGNED (NOT_ASSIGNED - 1)
@@ -194,6 +195,14 @@ enum class Sat
     Existential
 };
 
+struct RelianceGroupResult
+{
+    std::vector<std::vector<unsigned>> groups;
+    std::vector<unsigned> assignments;
+    // std::vector<bool> hasPredeccessors;
+    size_t minimumGroup;
+};
+
 // Common
 TermInfo getTermInfoUnify(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation);
 bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight);
@@ -208,5 +217,9 @@ void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleR
 std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules);
 std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules);
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const SimpleGraph &positiveGraph);
+std::pair<SimpleGraph, SimpleGraph> combineGraphs(const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph);
+void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules);
+RelianceGroupResult computeRelianceGroups(const SimpleGraph &graph, const SimpleGraph &graphTransposed, std::vector<bool> *activeNodes = nullptr);
+bool isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph);
 
 #endif

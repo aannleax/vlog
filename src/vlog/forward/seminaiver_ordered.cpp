@@ -21,119 +21,6 @@ SemiNaiverOrdered::SemiNaiverOrdered(EDBLayer &layer,
     // std::cout << "Running constructor of SemiNaiverOrdered" << '\n';
 }
 
-void SemiNaiverOrdered::fillOrder(SimpleGraph &graph, unsigned node, 
-    std::vector<unsigned> &visited, std::stack<unsigned> &stack, std::vector<bool> *activeNodes)
-{
-    visited[node] = 1;
-  
-    for(unsigned adjacentNode : graph.edges[node])
-    {
-        if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
-            continue;
-
-        if(visited[adjacentNode] == 0)
-            fillOrder(graph, adjacentNode, visited, stack);
-    }
-   
-    stack.push(node);
-}
-
-void SemiNaiverOrdered::dfsUntil(SimpleGraph &graph, unsigned node, 
-    std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup,
-    std::vector<bool> *activeNodes)
-{
-    visited[node] = 1;
-    currentGroup.push_back(node);
-
-    for(unsigned adjacentNode : graph.edges[node])
-    {
-        if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
-            continue;
-
-        if(visited[adjacentNode] == 0)
-            dfsUntil(graph, adjacentNode, visited, currentGroup, activeNodes);
-    }
-}
-
-SemiNaiverOrdered::RelianceGroupResult SemiNaiverOrdered::computeRelianceGroups(
-    SimpleGraph &graph, SimpleGraph &graphTransposed,
-    std::vector<bool> *activeNodes)
-{
-    RelianceGroupResult result;
-    result.assignments.resize(graph.numberOfInitialNodes, -1);
-
-    if (graph.nodes.size() == 0)
-        return result;
-
-    std::stack<unsigned> nodeStack;
-    std::vector<unsigned> visited;
-    visited.resize(graph.numberOfInitialNodes, 0);
-
-    // for (unsigned node = 0; node < graph.numberOfInitialNodes; ++node)
-    for (int node = graph.numberOfInitialNodes - 1; node >= 0 ; --node)
-    {
-        if (activeNodes != nullptr && !(*activeNodes)[node])
-            continue;
-
-        if (visited[node] == 0)
-            fillOrder(graph, node, visited, nodeStack, activeNodes);
-    }
-
-    std::fill(visited.begin(), visited.end(), 0);
-
-    std::vector<unsigned> currentGroup;
-    bool minFound = false;
-    while (!nodeStack.empty())
-    {
-        unsigned currentNode = nodeStack.top();
-        nodeStack.pop();
-  
-        if (visited[currentNode] == 0)
-        {
-            dfsUntil(graphTransposed, currentNode, visited, currentGroup, activeNodes);
-
-            if (currentGroup.size() > 0)
-            {
-                unsigned currentGroupIndex = result.groups.size();
-                result.groups.push_back(currentGroup);
-
-                for (unsigned member : currentGroup)
-                {
-                    result.assignments[member] = currentGroupIndex;
-                
-                    if (!minFound && activeNodes != nullptr)
-                    {
-                        bool hasPredeccessors = false; 
-                        for (unsigned pred : graphTransposed.edges[member])
-                        {
-                            if (!(*activeNodes)[pred])
-                              continue;
-
-                            if (std::find(currentGroup.begin(), currentGroup.end(), pred) == currentGroup.end())
-                            {
-                                hasPredeccessors = true;
-                                break;
-                            }
-                        }
-
-                        if (!hasPredeccessors)
-                        {
-                            result.minimumGroup = result.groups.size() - 1;
-                            minFound = true;
-                        }
-                    }
-                  
-                    // result.hasPredeccessors.push_back(hasPredeccessors);
-                }
-
-                currentGroup.clear();
-            }
-        }
-    }
-
-    return result;
-}
-
 void SemiNaiverOrdered::prepare(size_t lastExecution, int singleRuleToCheck, const std::vector<Rule> &allRules,
     std::vector<RelianceRuleInfo> &outInfo,
     std::vector<RuleExecutionDetails> &outRuleDetails
@@ -327,6 +214,8 @@ SemiNaiverOrdered::PositiveGroup *SemiNaiverOrdered::executeGroupByPositiveGroup
 
         return currentGroup;
     }   
+
+    return nullptr;
 }
 
 void SemiNaiverOrdered::sortRuleVectorById(std::vector<RelianceRuleInfo *> &infos)
@@ -416,90 +305,6 @@ void SemiNaiverOrdered::updateGraph(SimpleGraph &graph, SimpleGraph &graphTransp
     }
 }
 
-void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex, std::vector<bool> &literalsInPieces, const std::vector<uint32_t> &existentialVariables, std::vector<Literal> &result)
-{
-    const Literal &currentLiteral = heads[currentLiteralIndex];
-    literalsInPieces[currentLiteralIndex] = true;
-
-    for (unsigned termIndex = 0; termIndex < currentLiteral.getTupleSize(); ++termIndex)
-    {
-        VTerm currentTerm = currentLiteral.getTermAtPos(termIndex);
-
-        if (std::find(existentialVariables.begin(), existentialVariables.end(), currentTerm.getId()) == existentialVariables.end())
-            continue;
-
-        for (unsigned searchIndex = currentLiteralIndex + 1; searchIndex < heads.size(); ++searchIndex)
-        {
-            if (literalsInPieces[searchIndex])
-                continue;
-
-            const Literal &currentSearchedLiteral = heads[searchIndex];
-            for (unsigned searchTermIndex = 0; searchTermIndex < currentSearchedLiteral.getTupleSize(); ++searchTermIndex)
-            {
-                VTerm currentSearchedTerm = currentSearchedLiteral.getTermAtPos(searchTermIndex);
-            
-                if (currentTerm.getId() == currentSearchedTerm.getId())
-                {
-                    createPiece(heads, searchIndex, literalsInPieces, existentialVariables, result);
-                }
-            }
-        }
-    }
-    
-    result.push_back(currentLiteral);
-}
-
-void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules)
-{
-    uint32_t ruleId = outRules.size();
-    std::vector<Literal> body = rule.getBody();
-    std::vector<Literal> heads = rule.getHeads();
-
-    std::vector<Var_t> existentialVariables = rule.getExistentialVariables();
-
-    std::vector<bool> literalsInPieces;
-    literalsInPieces.resize(heads.size(), false);
-
-    for (unsigned literalIndex = 0; literalIndex < heads.size(); ++literalIndex)
-    {
-        const Literal &currentLiteral = heads[literalIndex];
-        
-        if (literalsInPieces[literalIndex])
-            continue;
-
-        std::vector<Literal> newPiece;
-        createPiece(heads, literalIndex, literalsInPieces, existentialVariables, newPiece);
-
-        if (newPiece.size() > 0)
-        {
-            outRules.emplace_back(ruleId, newPiece, body);
-            ++ruleId;
-        }   
-    }
-}
-
-std::pair<SimpleGraph, SimpleGraph> SemiNaiverOrdered::combineGraphs(
-    const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph)
-{
-    SimpleGraph unionGraph(positiveGraph.nodes.size()), unionGraphTransposed(positiveGraph.nodes.size());
-
-    auto copyGraph = [] (const SimpleGraph &simple, SimpleGraph &outUnion, SimpleGraph &outUnionTransposed) -> void
-    {
-        for (unsigned fromNode = 0; fromNode < simple.nodes.size(); ++fromNode)
-        {
-            for (unsigned toNode : simple.edges[fromNode])
-            {
-                outUnion.addEdge(fromNode, toNode);
-                outUnionTransposed.addEdge(toNode, fromNode);
-            }
-        }
-    };
-
-    copyGraph(positiveGraph, unionGraph, unionGraphTransposed);
-    copyGraph(restraintGraph, unionGraph, unionGraphTransposed);
-    
-    return std::make_pair(unionGraph, unionGraphTransposed);
-}
 
 SemiNaiverOrdered::RestrainedGroup SemiNaiverOrdered::computeRestrainedGroup(
     std::vector<RelianceRuleInfo> &allRules, 

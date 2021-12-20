@@ -9,7 +9,8 @@
 
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo, 
-    const VariableAssignments &assignments);
+    const VariableAssignments &assignments,
+    RelianceStrategy strat);
 
 bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals, 
     const VariableAssignments &assignments)
@@ -36,9 +37,30 @@ bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals,
     return true;
 }
 
+bool restrainCheckNullsInBody(const std::vector<Literal> &literals,
+    const VariableAssignments &assignments, RelianceRuleRelation relation)
+{
+    for (const Literal &literal : literals)
+    {
+        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+        {
+            VTerm currentTerm = literal.getTermAtPos(termIndex);
+        
+            if ((int32_t)currentTerm.getId() > 0)
+            {
+                if (assignments.getConstant((int32_t)currentTerm.getId(), relation) < 0)
+                    return false;
+            }
+        }
+    }   
+
+    return true;   
+}
+
 bool restrainCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments)
+    const VariableAssignments &assignments,
+    RelianceStrategy strat)
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toHeadLiterals = ruleTo.getHeads();
@@ -59,12 +81,22 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
         notMappedHeadLiterals.push_back(toHeadLiterals[headIndex]);
     }
 
+    if (!restrainCheckNullsInBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From)
+            || restrainCheckNullsInBody(ruleTo.getBody(), assignments, RelianceRuleRelation::To))
+    {
+        if ((strat & RelianceStrategy::EarlyTermination) > 0)
+            return false;
+        else
+            return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+    }
+
+
     if (!assignments.hasMappedExistentialVariable)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
 
     if (!checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments))
     {
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
     }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
@@ -81,7 +113,12 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (toHeadSatisfied)
-        return false;
+    {
+        if ((strat & RelianceStrategy::EarlyTermination) > 0)
+            return false;
+        else
+            return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+    }
 
     prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
     satisfied.clear();
@@ -98,7 +135,7 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (alternativeMatchAlreadyPresent)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
 
     prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
     satisfied.clear();
@@ -115,7 +152,7 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (fromHeadSatisfied)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
 
     return true;
 }
@@ -152,7 +189,7 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
 
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments)
+    const VariableAssignments &assignments, RelianceStrategy strat)
 {
     unsigned headToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
@@ -172,7 +209,7 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
             if (!restrainExtendAssignment(literalFrom, literalTo, extendedAssignments))
                 continue;
 
-            if (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
+            if (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
                 return true;
         }
 
@@ -182,16 +219,16 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     return false;
 }
 
-bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo)
+bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo, RelianceStrategy strat)
 {
     std::vector<unsigned> mappingDomain;
     VariableAssignments assignments(variableCountFrom, variableCountTo);
 
-    return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+    return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
 }
 
 
-std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat)
 {
     SimpleGraph result(rules.size()), resultTransposed(rules.size());
     
@@ -269,7 +306,7 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<R
                 unsigned variableCountTo = variableCounts[ruleTo];
 
                 numCalls++;
-                if (restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
+                if (restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat))
                 {
                     result.addEdge(ruleFrom, ruleTo);
                     resultTransposed.addEdge(ruleTo, ruleFrom);

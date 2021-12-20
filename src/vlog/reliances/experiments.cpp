@@ -1,10 +1,11 @@
 #include <vlog/reliances/experiments.h>
 
-void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition)
+void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat)
 {
     std::cout << "Launched coreStratified experiment with parameters " << '\n';
-    std::cout << "\t" << rulesPath << '\n';
-    std::cout << "\t" << ((pieceDecomposition) ? "true" : "false") << std::endl;
+    std::cout << "\t" << "Path: " << rulesPath << '\n';
+    std::cout << "\t" << "Piece: " << ((pieceDecomposition) ? "true" : "false") << '\n';
+    std::cout << "\t" <<  "Strat: " << strat << std::endl;
 
     EDBConf emptyConf("", false);
     EDBLayer edbLayer(emptyConf, false);

@@ -338,6 +338,8 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Path to file containing the rule set.", false);
     rel_options.add<bool>("", "piece", false,
             "Whether or not the each rule should be decomposed into its pieces.", false);
+    rel_options.add<int32_t>("", "strat", RelianceStrategy::Full,
+            "Enables or disables optimizations used during reliance computation", false);
 
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
@@ -705,8 +707,9 @@ void launchFullMat(int argc,
 void launchRelianceComputation(ProgramArgs &vm) {
     std::string pathRules = vm["rule"].as<string>();
     bool pieceDecomposition = vm["piece"].as<bool>();
+    int32_t strategy = vm["start"].as<int32_t>();
 
-    experimentCoreStratified(pathRules, pieceDecomposition);
+    experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy);
 }
 
 void execSPARQLQuery(EDBLayer &edb, ProgramArgs &vm) {

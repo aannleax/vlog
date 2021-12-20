@@ -33,7 +33,7 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
 }
 
 bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
-    const VariableAssignments &assignments)
+    const VariableAssignments &assignments, RelianceRuleRelation relation)
 {
     for (const Literal &literal : literals)
     {
@@ -43,7 +43,7 @@ bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
         
             if ((int32_t)currentTerm.getId() > 0)
             {
-                if (assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To) < 0)
+                if (assignments.getConstant((int32_t)currentTerm.getId(), relation) < 0)
                     return false;
             }
         }
@@ -54,11 +54,13 @@ bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments);
+    const VariableAssignments &assignments,
+    RelianceStrategy strat);
 
 bool positiveCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments)
+    const VariableAssignments &assignments,
+    RelianceStrategy strat)
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toBodyLiterals = ruleTo.getBody();
@@ -79,9 +81,17 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
         notMappedToBodyLiterals.push_back(toBodyLiterals[bodyIndex]);
     }
 
-    if (!positiveCheckNullsInToBody(notMappedToBodyLiterals, assignments))
+    if (!positiveCheckNullsInToBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From))
     {
-        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+        if ((strat & RelianceStrategy::EarlyTermination) > 0)
+            return false;
+        else
+            return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+    }
+
+    if (!positiveCheckNullsInToBody(notMappedToBodyLiterals, assignments, RelianceRuleRelation::To))
+    {
+        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
     }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
@@ -100,7 +110,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     if (fromRuleSatisfied)
     {
-        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
     }
 
     satisfied.clear();
@@ -118,7 +128,10 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     if (toBodySatisfied)
     {
-        return false;
+        if ((strat & RelianceStrategy::EarlyTermination) > 0)
+            return false;
+        else
+            return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
     }
 
     satisfied.clear();
@@ -139,7 +152,8 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments)
+    const VariableAssignments &assignments,
+    RelianceStrategy strat)
 {
     unsigned bodyToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
@@ -159,7 +173,7 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
             if (!positiveExtendAssignment(literalFrom, literalTo, extendedAssignments))
                 continue;
 
-            if (positiveCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
+            if (positiveCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
                 return true;
         }
 
@@ -169,15 +183,16 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
     return false;
 }
 
-bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo)
+bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo,
+    RelianceStrategy strat)
 {
     std::vector<unsigned> mappingDomain;
     VariableAssignments assignments(variableCountFrom, variableCountTo);
 
-    return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments);
+    return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
 }
 
-std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules)
+std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat)
 {
     SimpleGraph result(rules.size()), resultTransposed(rules.size());
     
@@ -260,7 +275,7 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<R
                 unsigned variableCountTo = variableCounts[ruleTo];
                 
                 ++numCalls;
-                if (positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo))
+                if (positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat))
                 {
                     result.addEdge(ruleFrom, ruleTo);
                     resultTransposed.addEdge(ruleTo, ruleFrom);

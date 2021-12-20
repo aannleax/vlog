@@ -14,6 +14,13 @@
 #define NOT_ASSIGNED std::numeric_limits<int64_t>::max()
 #define ASSIGNED (NOT_ASSIGNED - 1)
 
+enum RelianceStrategy : int32_t
+{
+    Naive = 0,
+    EarlyTermination = 1,
+    Full = 1
+};
+
 struct SimpleGraph
 {
     std::vector<std::vector<size_t>> edges;
@@ -214,8 +221,8 @@ Rule markExistentialVariables(const Rule &rule);
 void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings);
 
 // For outside
-std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules);
-std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules);
+std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full);
+std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full);
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const SimpleGraph &positiveGraph);
 std::pair<SimpleGraph, SimpleGraph> combineGraphs(const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph);
 void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules);

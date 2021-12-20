@@ -10,6 +10,7 @@
 #include <vlog/utils.h>
 #include <vlog/ml/ml.h>
 #include <vlog/deps/detector.h>
+#include <vlog/reliances/experiments.h>
 
 #include <vlog/cycles/checker.h>
 
@@ -57,6 +58,7 @@ void printHelp(const char *programName, ProgramArgs &desc) {
     cout << "lookup\t\t lookup for values in the dictionary." << endl << endl;
     cout << "cycles\t\t try and detect cycles in the rules." << endl << endl;
     cout << "deps\t\t detect dependencies in the database." << endl << endl;
+    cout << "rel\t\t detect reliances in the rule set." << endl << endl;
 
     cout << desc.tostring() << endl;
 }
@@ -79,7 +81,7 @@ bool checkParams(ProgramArgs &vm, int argc, const char** argv) {
 
     if (cmd != "help" && cmd != "query" && cmd != "lookup" && cmd != "load" && cmd != "queryLiteral"
             && cmd != "mat" && cmd != "mat_tg" && cmd != "rulesgraph" && cmd != "server" && cmd != "gentq" &&
-            cmd != "cycles" && cmd !="deps") {
+            cmd != "cycles" && cmd !="deps" && cmd != "rel") {
         printErrorMsg("The command \"" + cmd + "\" is unknown.");
         return false;
     }
@@ -207,6 +209,16 @@ bool checkParams(ProgramArgs &vm, int argc, const char** argv) {
                 return false;
             }
         }
+        else if (cmd == "rel") {
+            std::string path = vm["rule"].as<string>();
+            if (path.empty()) {
+                printErrorMsg("You must set up the \"rule\" parameter to launch the reliance computation");
+            }
+            if (!path.empty() && !Utils::exists(path)) {
+                printErrorMsg("The rule file \"" + path + "\" does not exists");
+                return false;
+            }
+        }
     }
 
     return true;
@@ -320,6 +332,12 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
     cmdline_options.add<string>("e", "edb", "default",
             "Path to the edb conf file. Default is 'edb.conf' in the same directory as the exec file.",false);
     cmdline_options.add<int>("","sleep", 0, "sleep <arg> seconds before starting the run. Useful for attaching profiler.",false);
+
+    ProgramArgs::GroupArgs& rel_options = *vm.newGroup("Options for <rel>");
+    rel_options.add<string>("", "rule", "",
+            "Path to file containing the rule set.", false);
+    rel_options.add<bool>("", "piece", false,
+            "Whether or not the each rule should be decomposed into its pieces.", false);
 
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
@@ -684,6 +702,13 @@ void launchFullMat(int argc,
     }
 }
 
+void launchRelianceComputation(ProgramArgs &vm) {
+    std::string pathRules = vm["rule"].as<string>();
+    bool pieceDecomposition = vm["piece"].as<bool>();
+
+    experimentCoreStratified(pathRules, pieceDecomposition);
+}
+
 void execSPARQLQuery(EDBLayer &edb, ProgramArgs &vm) {
     //Parse the rules and create a program
     Program p(&edb);
@@ -993,7 +1018,7 @@ int main(int argc, const char** argv) {
         edbFile = dirExecFile + DIR_SEP + std::string("edb.conf");
     }
 
-    if (cmd != "load" && !Utils::exists(edbFile)) {
+    if (cmd != "load" && cmd != "rel" && !Utils::exists(edbFile)) {
         printErrorMsg("I could not find the EDB conf file " + edbFile);
         return EXIT_FAILURE;
     }
@@ -1209,6 +1234,10 @@ int main(int argc, const char** argv) {
         detectDeps(rulesFile, *layer);
 	delete layer;
     }
+    else if (cmd == "rel") {
+        launchRelianceComputation(vm);
+    }
+
     std::chrono::duration<double> sec = std::chrono::system_clock::now() - start;
     LOG(INFOL) << "Runtime = " << sec.count() * 1000 << " milliseconds";
 

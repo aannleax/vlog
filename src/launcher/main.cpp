@@ -11,6 +11,7 @@
 #include <vlog/ml/ml.h>
 #include <vlog/deps/detector.h>
 #include <vlog/reliances/experiments.h>
+#include <vlog/reliances/tests.h>
 
 #include <vlog/cycles/checker.h>
 
@@ -340,6 +341,8 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Whether or not the each rule should be decomposed into its pieces.", false);
     rel_options.add<int32_t>("", "strat", RelianceStrategy::Full,
             "Enables or disables optimizations used during reliance computation", false);
+    rel_options.add<bool>("", "test", false,
+            "If set performs a series of tests to verify the reliance computation. Use rule parameter to supply folder containing the testing rule sets.", false);
 
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
@@ -708,8 +711,17 @@ void launchRelianceComputation(ProgramArgs &vm) {
     std::string pathRules = vm["rule"].as<string>();
     bool pieceDecomposition = vm["piece"].as<bool>();
     int32_t strategy = vm["strat"].as<int32_t>();
+    bool isTest = vm["test"].as<bool>();
 
-    experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy);
+    if (isTest)
+    {
+        performTests(pathRules);
+    }
+    else
+    {
+        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy);
+    }
+
 }
 
 void execSPARQLQuery(EDBLayer &edb, ProgramArgs &vm) {

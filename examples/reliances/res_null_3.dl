@@ -1,2 +1,2 @@
-Q(x), H(x, w, w) :- A(x, y)
-R(x), H(y, v, w) :- B(x)
+Q(X), H(X, W, W) :- A(X, Y)
+R(X), H(Y, V, W) :- B(X)

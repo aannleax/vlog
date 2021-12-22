@@ -1,2 +1,2 @@
-H(x, v), T(y, v) :- A(x, y)
-T(w, y) :- H(x, y)
+H(X, V), T(Y, V) :- A(X, Y)
+T(W, Y) :- H(X, Y)

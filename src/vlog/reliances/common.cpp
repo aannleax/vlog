@@ -211,18 +211,35 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
             continue;
 
         const Literal &rightLiteral = right[rightIndex];
-        
+        unsigned tupleSize = rightLiteral.getTupleSize(); //Should be the same as leftLiteral.getTupleSize()
+
         bool rightSatisfied = false;
+        
         bool rightExistential = false;
+        std::vector<std::unordered_map<int64_t, TermInfo>> *currentMappingVector = nullptr; 
+
+        for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
+        {
+            VTerm rightTerm = rightLiteral.getTermAtPos(termIndex);
+            TermInfo rightInfo = getTermInfoModels(rightTerm, assignments, rightRelation, false); 
+
+            if (treatExistentialAsVariables && rightInfo.type == TermInfo::Types::Existential)
+            {
+                rightExistential = true;
+                currentMappingVector = &existentialMappings[existentialMappingIndex];
+
+                break;
+            }
+        }
+
         for (const Literal &leftLiteral : left)
         {
             if (rightLiteral.getPredicate().getId() != leftLiteral.getPredicate().getId())
                 continue;
 
-            std::unordered_map<int64_t, TermInfo> *currentMapping = nullptr;
-
             bool leftModelsRight = true;
-            unsigned tupleSize = leftLiteral.getTupleSize(); //Should be the same as rightLiteral.getTupleSize()
+
+            std::unordered_map<int64_t, TermInfo> *currentMapping = nullptr;
 
             for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
             {
@@ -234,15 +251,12 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
 
                 if (treatExistentialAsVariables && rightInfo.type == TermInfo::Types::Existential)
                 {
-                    rightExistential = true;
-
                     if (currentMapping == nullptr)
-                    {   
-                        auto &currentMappingVector = existentialMappings[existentialMappingIndex];
-                        currentMappingVector.emplace_back();
-                        currentMapping = &currentMappingVector.back();
+                    {
+                        currentMappingVector->emplace_back();
+                        currentMapping = &currentMappingVector->back();
                     }
-                 
+
                     auto mapIterator = currentMapping->find(rightInfo.termId);
                     if (mapIterator == currentMapping->end())
                     {
@@ -288,7 +302,10 @@ bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftR
         }
 
         if (rightExistential)
+        {
+            isCompletelySatisfied = false;
             ++existentialMappingIndex;
+        }
         else
         {
             if (rightSatisfied)

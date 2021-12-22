@@ -23,19 +23,7 @@ struct TestCase
         this->type = type;
         this->name = name;
 
-        size_t nodeCount = 0;
-        for (const auto &vec : edges)
-        {
-            for (size_t entry : vec)
-            {
-                if (entry > nodeCount)
-                {
-                    nodeCount = entry;
-                }
-            }
-        }
-
-        expected = SimpleGraph(nodeCount + 1);
+        expected = SimpleGraph(edges.size());
         expected.edges = edges;
     }
 };

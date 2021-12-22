@@ -47,6 +47,8 @@
 #include "vlog/reliances/positive.cpp"
 #include "vlog/reliances/restrain.cpp"
 #include "vlog/reliances/common.cpp"
+#include "vlog/reliances/experiments.cpp"
+#include "vlog/reliances/tests.cpp"
 #include "vlog/sparql/sparqliterator.cpp"
 #include "vlog/sparql/sparqltable.cpp"
 #include "vlog/text/elastictable.cpp"

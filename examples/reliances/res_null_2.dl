@@ -1,2 +1,2 @@
-H(x, y, v) :- A(x, y)
-H(y, v, w) :- B(x)
+H(X, Y, V) :- A(X, Y)
+H(X, V, W) :- B(X)

@@ -50,26 +50,26 @@ typedef std::vector<std::vector<size_t>> Edges;
 void performTests(const std::string &ruleFolder)
 {
     std::vector<TestCase> cases;
-    cases.emplace_back(TestCase::Type::Positive, "pos_basic.dl", Edges{{1}});
-    cases.emplace_back(TestCase::Type::Positive, "pos_basic_2.dl", Edges{{1}});
-    cases.emplace_back(TestCase::Type::Positive, "pos_thesis.dl", Edges{{1}});
-    cases.emplace_back(TestCase::Type::Positive, "pos_null_1.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_null.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_phi2Ia.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_psi1Ia_phi1.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_psi1Ia_phi1phi22.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_psiIa_phi22.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_phi1.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_phi22.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_osi1.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_unif_1.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Positive, "pos_unif_2.dl", Edges{});
+    cases.emplace_back(TestCase::Type::Positive, "pos_basic.dl", Edges{{1}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_basic_2.dl", Edges{{1}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_thesis.dl", Edges{{1}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_null_1.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_null_2.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_phi2Ia.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi1Ia_phi1.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi1Ia_phi1phi22.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi1Ia_phi22.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_phi1.dl", Edges{{}, {0}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_phi22.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_psi1.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_unif_1.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_unif_2.dl", Edges{{}, {}});
 
-    cases.emplace_back(TestCase::Type::Restraint, "pos_null_1.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Restraint, "pos_null_2.dl", Edges{{1}});
-    cases.emplace_back(TestCase::Type::Restraint, "pos_null_3.dl", Edges{{0,1}, {0,1}});
-    cases.emplace_back(TestCase::Type::Restraint, "pos_psi1Ibm_psi2.dl", Edges{});
-    cases.emplace_back(TestCase::Type::Restraint, "pos_psi2Iam_phi2.dl", Edges{});
+    cases.emplace_back(TestCase::Type::Restraint, "res_null_1.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_null_2.dl", Edges{{1}, {}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_null_3.dl", Edges{{1}, {}}); // Should change when self-restraints are implemented
+    cases.emplace_back(TestCase::Type::Restraint, "res_psi1Ibm_psi2.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_psi2Iam_phi2.dl", Edges{{}, {}});
  
 
     size_t numberOfFailedTests = 0;

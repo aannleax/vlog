@@ -1,2 +1,2 @@
-A(x, v, v) :- B(x)
-A(x, z, y) :- A(x, y, z)
+A(X, V, V) :- B(X)
+A(X, Z, Y) :- A(X, Y, Z)

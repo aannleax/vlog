@@ -1,2 +1,2 @@
-A(x, y), R(x) :- A(x, y)
-B(x, y) :- A(x, y)
+A(X, Y), R(X) :- A(X, Y)
+B(X, Y) :- A(X, Y)

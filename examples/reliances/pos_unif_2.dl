@@ -1,2 +1,2 @@
-H(x, v, "Const") :- B(x)
-C(y, z) :- H(y, z, z)
+H(X, V, const) :- B(X)
+C(Y, Z) :- H(Y, Z, Z)

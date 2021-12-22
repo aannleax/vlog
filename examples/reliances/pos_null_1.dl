@@ -1,2 +1,2 @@
-h(x, y) :- b(x)
-c(y) :- h(y, y)
+H(X, Y) :- B(X)
+C(Y) :- H(Y, Y)

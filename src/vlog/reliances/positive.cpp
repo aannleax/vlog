@@ -103,7 +103,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     bool fromRuleSatisfied = relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
     fromRuleSatisfied |= relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
 
-    if (fromRuleSatisfied && ruleFrom.isExistential())
+    if (!fromRuleSatisfied && ruleFrom.isExistential())
     {
         fromRuleSatisfied = checkConsistentExistential(existentialMappings);
     }
@@ -121,7 +121,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     bool toBodySatisfied = relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
     toBodySatisfied = relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
 
-    if (toBodySatisfied && ruleTo.isExistential())
+    if (!toBodySatisfied && ruleTo.isExistential())
     {
         toBodySatisfied = checkConsistentExistential(existentialMappings);
     }
@@ -142,7 +142,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
     toRuleSatisfied |= relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
     toRuleSatisfied |= relianceModels(ruleFrom.getHeads(), RelianceRuleRelation::From, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
  
-    if (toRuleSatisfied && ruleTo.isExistential())
+    if (!toRuleSatisfied && ruleTo.isExistential())
     {
         toRuleSatisfied = checkConsistentExistential(existentialMappings);
     }
@@ -297,9 +297,6 @@ unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const S
     {
         for (unsigned ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
         {
-            if (ruleFrom == ruleTo)
-                continue;
-
             if (positiveGraph.containsEdge(ruleFrom, ruleTo))
                 continue;
 

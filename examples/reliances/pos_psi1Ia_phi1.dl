@@ -1,2 +1,2 @@
-A(v, v) :- A(x, x)
-C(y) :- A(y, y)
+A(V, V) :- A(X, X)
+C(Y) :- A(Y, Y)

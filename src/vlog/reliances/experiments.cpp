@@ -1,6 +1,6 @@
 #include <vlog/reliances/experiments.h>
 
-void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat)
+void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds)
 {
     std::cout << "Launched coreStratified experiment with parameters " << '\n';
     std::cout << "\t" << "Path: " << rulesPath << '\n';
@@ -34,19 +34,37 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
     if (pieceDecomposition)
         std::cout << "#PieceRules: " << allPieceDecomposedRules.size() << '\n';
 
-    std::cout << "Computing positive reliances..." << '\n';
-    std::chrono::system_clock::time_point relianceStart = std::chrono::system_clock::now();
-    std::pair<SimpleGraph, SimpleGraph> positiveGraphs = computePositiveReliances(allRules);
-    std::cout << "Time Positive: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0 << '\n';
+    RelianceComputationResult positiveResult = computePositiveReliances(allRules, strat, timeoutMilliSeconds);
+    std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
 
-    std::cout << "Computing restraint reliances..." << '\n';
-    relianceStart = std::chrono::system_clock::now();
-    std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = computeRestrainReliances(allRules);
-    std::cout << "Time Restraint: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0 << '\n';
+    RelianceComputationResult restrainResult = computeRestrainReliances(allRules, strat, timeoutMilliSeconds);
+    std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = restrainResult.graphs;
+    
+    bool timeout = positiveResult.timeout || restrainResult.timeout;
 
-    std::pair<SimpleGraph, SimpleGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
+    std::cout << "Calls-Positive: " << positiveResult.numberOfCalls << '\n';
+    std::cout << "Calls-Restraint: " << restrainResult.numberOfCalls << '\n';
+    std::cout << "Calls-Overall: " << positiveResult.numberOfCalls + restrainResult.numberOfCalls << '\n';
+    
+    if (!timeout)
+    {
+        std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << '\n';
+        std::cout << "Time-Restraint: " << restrainResult.timeMilliSeconds << '\n';
+        std::cout << "Time-Overall: " << positiveResult.timeMilliSeconds + restrainResult.timeMilliSeconds << '\n';
 
-    bool coreStratified = isCoreStratified(unionGraphs.first, unionGraphs.second, restrainingGraphs.first);
+        std::pair<SimpleGraph, SimpleGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
+        CoreStratifiedResult coreStratifiedResult = isCoreStratified(unionGraphs.first, unionGraphs.second, restrainingGraphs.first);
+        bool coreStratified = coreStratifiedResult.stratified;
+        std::cout << "Core-Stratified: " << ((coreStratified) ? "1" : "0") << '\n';
 
-    std::cout << "Core-Stratified: " << ((coreStratified) ? "yes" : "no") << '\n';
+        if (!coreStratified)
+        {
+            std::cout << "NumberRestrainedGroups: " << coreStratifiedResult.numberOfRestrainedGroups << '\n';
+            std::cout << "BiggestRestrainedGroup-Abs: " << coreStratifiedResult.biggestRestrainedGroupSize << '\n';
+            std::cout << "BiggestRestrainedGroup-Rel: " << (coreStratifiedResult.biggestRestrainedGroupSize / (float)allRules.size()) << '\n';
+            std::cout << "RulesInRestrainedGroups-Rel: " << (coreStratifiedResult.numberOfRulesInRestrainedGroups / (float)allRules.size()) << '\n';
+        }
+    }
+
+    std::cout << "Timeout: " << ((timeout) ? "1" : "0") << '\n';
 }

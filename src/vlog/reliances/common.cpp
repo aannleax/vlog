@@ -577,9 +577,10 @@ RelianceGroupResult computeRelianceGroups(
     return result;
 }
 
-bool isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph)
+CoreStratifiedResult isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph)
 {
-    bool coreStratified = true;
+    CoreStratifiedResult result;
+    result.stratified = true;
 
     RelianceGroupResult staticRestrainedGroups = computeRelianceGroups(unionGraph, unionGraphTransposed);
     
@@ -587,16 +588,167 @@ bool isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionG
     {
         for (unsigned ruleIndex : group)
         {
+            bool isGroupRestrained = false;
+
             for (unsigned restrainedRule : restrainingGraph.edges[ruleIndex])
             {
                 if (std::find(group.begin(), group.end(), restrainedRule) != group.end())
                 {
-                    coreStratified = false;
+                    isGroupRestrained = true;
+
+                    result.stratified = false;
+                    result.numberOfRulesInRestrainedGroups += (unsigned)group.size();
+                    ++result.numberOfRestrainedGroups;
+
+                    if (group.size() > result.biggestRestrainedGroupSize)
+                    {
+                        result.biggestRestrainedGroupSize = (unsigned)group.size();
+                    }
+
                     break;
                 }
             }
+
+            if (isGroupRestrained)
+                break;
         }
     }
 
-    return coreStratified;
+    return result;
+}
+
+unsigned addPredicate(RuleHashInfo &info, PredId_t predId)
+{
+    auto iterator = info.predIdToLocal.find(predId);
+    if (iterator == info.predIdToLocal.end())
+    {
+        info.predIdToLocal[predId] = info.localPredicate;
+        return info.localPredicate++;
+    }
+    else
+    {
+        return iterator->second;
+    }
+};
+
+RuleHashInfo ruleHashInfoFirst(const Rule &rule)
+{
+    RuleHashInfo result;
+
+    auto literalToString = [&] (const Literal &literal) -> std::string {
+        std::string result;
+        result.reserve(100);
+
+        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+        {
+            VTerm currentTerm = literal.getTermAtPos(termIndex);
+        
+            if ((int32_t)currentTerm.getId() > 0)
+            {
+                result += std::to_string(currentTerm.getId()) + ",";
+            }
+            else
+            {
+                result += std::to_string(-1 * (int64_t)currentTerm.getValue()) + ",";
+            }
+        }
+
+        return result;
+    };
+
+    std::string literalStream, predicateStream;
+    literalStream.reserve(1000); predicateStream.reserve(1000);
+
+    for (const Literal &currentLiteral : rule.getHeads())
+    {
+        unsigned currentPredId = addPredicate(result, currentLiteral.getPredicate().getId());
+        predicateStream += std::string("|") + std::to_string(currentPredId);
+
+        literalStream += literalToString(currentLiteral) + ";";
+    }
+
+    literalStream += "_";
+
+    for (const Literal &currentLiteral : rule.getBody())
+    {
+        unsigned currentPredId = addPredicate(result, currentLiteral.getPredicate().getId());
+        predicateStream += std::string("|") + std::to_string(currentPredId);
+
+        literalStream += literalToString(currentLiteral) + ";";
+    }
+
+    result.firstRuleString = literalStream + predicateStream;
+    result.secondRuleString = literalStream;
+
+    return result;
+}
+
+std::string rulePairHash(RuleHashInfo ruleFromInfo, const RuleHashInfo &ruleToInfo, const Rule &rule)
+{
+    std::string result = ruleFromInfo.firstRuleString + ruleToInfo.secondRuleString;
+
+    for (const Literal &currentLiteral : rule.getHeads())
+    {
+        unsigned currentPredId = addPredicate(ruleFromInfo, currentLiteral.getPredicate().getId());
+        result += std::string("|") + std::to_string(currentPredId);
+    }
+
+    for (const Literal &currentLiteral : rule.getBody())
+    {
+        unsigned currentPredId = addPredicate(ruleFromInfo, currentLiteral.getPredicate().getId());
+        result += std::string("|") + std::to_string(currentPredId);
+    }
+
+    return result;
+
+    // std::unordered_map<PredId_t, unsigned> PredIdToLocal;
+    // unsigned LocalPredicate = 0;
+
+    // 
+
+    // auto literalToString = [&] (const Literal &literal) -> std::string {
+    //     std::stringstream Stream;
+    //     unsigned currentPredId = addPredicate(literal.getPredicate().getId());
+    //     Stream << currentPredId << '(';
+        
+    //     for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+    //     {
+    //         VTerm currentTerm = literal.getTermAtPos(termIndex);
+        
+    //         if ((int32_t)currentTerm.getId() > 0)
+    //         {
+    //             Stream << currentTerm.getId() << ",";
+    //         }
+    //         else
+    //         {
+    //             Stream << -1 * (int64_t)currentTerm.getValue() << ",";
+    //         }
+    //     }
+
+    //     Stream << ")";
+    //     return Stream.str();
+    // };
+
+    // std::stringstream result;
+    // for (const Literal &currentLiteral : ruleFrom.getHeads())
+    // {
+    //     result << literalToString(currentLiteral);
+    // }
+    // result << "_";
+    // for (const Literal &currentLiteral : ruleFrom.getBody())
+    // {
+    //     result << literalToString(currentLiteral);
+    // }
+    // result << "_";
+    // for (const Literal &currentLiteral : ruleTo.getHeads())
+    // {
+    //     result << literalToString(currentLiteral);
+    // }
+    // result << "_";
+    // for (const Literal &currentLiteral : ruleTo.getBody())
+    // {
+    //     result << literalToString(currentLiteral);
+    // }
+
+    // return result.str();
 }

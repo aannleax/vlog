@@ -343,6 +343,8 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Enables or disables optimizations used during reliance computation", false);
     rel_options.add<bool>("", "test", false,
             "If set performs a series of tests to verify the reliance computation. Use rule parameter to supply folder containing the testing rule sets.", false);
+    rel_options.add<int>("", "time", 1000,
+            "Timeout per reliance.", false);
 
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
@@ -712,6 +714,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
     bool pieceDecomposition = vm["piece"].as<bool>();
     int32_t strategy = vm["strat"].as<int32_t>();
     bool isTest = vm["test"].as<bool>();
+    int timeout = vm["time"].as<int>();
 
     if (isTest)
     {
@@ -719,7 +722,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
     }
     else
     {
-        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy);
+        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy, (unsigned)timeout);
     }
 
 }

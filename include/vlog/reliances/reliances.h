@@ -18,7 +18,9 @@ enum RelianceStrategy : int32_t
 {
     Naive = 0,
     EarlyTermination = 1,
-    Full = 1
+    CutPairs = 2,
+    PairHash = 4,
+    Full = 7
 };
 
 struct SimpleGraph
@@ -72,6 +74,31 @@ struct SimpleGraph
 enum class RelianceRuleRelation
 {
     From, To
+};
+
+struct RelianceComputationResult
+{
+    std::pair<SimpleGraph, SimpleGraph> graphs;
+    uint64_t numberOfCalls;
+    bool timeout;
+    unsigned timeMilliSeconds = 0;
+};
+
+struct CoreStratifiedResult
+{
+    bool stratified = false;
+    unsigned numberOfRestrainedGroups = 0;
+    unsigned biggestRestrainedGroupSize = 0;
+    unsigned numberOfRulesInRestrainedGroups = 0;
+};
+
+const size_t rulePairCacheSize = 40000;
+struct RuleHashInfo
+{
+    std::unordered_map<PredId_t, unsigned> predIdToLocal;
+    unsigned localPredicate = 0;
+    std::string firstRuleString = "";
+    std::string secondRuleString = "";
 };
 
 struct VariableAssignments
@@ -221,12 +248,13 @@ Rule markExistentialVariables(const Rule &rule);
 void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings);
 
 // For outside
-std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full);
-std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full);
+RelianceComputationResult computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full, unsigned timeoutMilliSeconds = 0.0);
+RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full, unsigned timeoutMilliSeconds = 0.0);
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const SimpleGraph &positiveGraph);
 std::pair<SimpleGraph, SimpleGraph> combineGraphs(const SimpleGraph &positiveGraph, const SimpleGraph &restraintGraph);
 void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules);
 RelianceGroupResult computeRelianceGroups(const SimpleGraph &graph, const SimpleGraph &graphTransposed, std::vector<bool> *activeNodes = nullptr);
-bool isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph);
-
+CoreStratifiedResult isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph);
+std::string rulePairHash(RuleHashInfo ruleFromInfo, const RuleHashInfo &ruleToInfo, const Rule &ruleTo);
+RuleHashInfo ruleHashInfoFirst(const Rule &rule);
 #endif

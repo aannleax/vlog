@@ -6,6 +6,11 @@
 #include <unordered_map>
 #include <unordered_set>
 
+std::chrono::system_clock::time_point globalPositiveTimepointStart;
+unsigned globalPositiveTimeout = 0;
+unsigned globalPositiveTimeoutCheckCount = 0;
+bool globalPositiveIsTimeout = false;
+
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
     VariableAssignments &assignments)
 {
@@ -155,6 +160,18 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
     const VariableAssignments &assignments,
     RelianceStrategy strat)
 {
+    if (globalPositiveTimeout != 0 && globalPositiveTimeoutCheckCount % 1000 == 0)
+    {
+        unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalPositiveTimepointStart).count();
+        if (currentTimeMilliSeconds > globalPositiveTimeout)
+        {
+            globalPositiveIsTimeout = true;
+            return true;
+        }
+    }
+
+    ++globalPositiveTimeoutCheckCount;
+
     unsigned bodyToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
     for (unsigned bodyToIndex = bodyToStartIndex; bodyToIndex < ruleTo.getBody().size(); ++bodyToIndex)
@@ -192,10 +209,11 @@ bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
     return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
 }
 
-std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat)
+RelianceComputationResult computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat, unsigned timeoutMilliSeconds)
 {
-    SimpleGraph result(rules.size()), resultTransposed(rules.size());
-    
+    RelianceComputationResult result;
+    result.graphs = std::pair<SimpleGraph, SimpleGraph>(SimpleGraph(rules.size()), SimpleGraph(rules.size()));
+
     std::vector<Rule> markedRules;
     markedRules.reserve(rules.size());
 
@@ -224,69 +242,160 @@ std::pair<SimpleGraph, SimpleGraph> computePositiveReliances(const std::vector<R
         markedRules.push_back(markedRule);
     }
 
-    std::unordered_map<PredId_t, std::vector<size_t>> headFromMap, bodyToMap;
-    std::unordered_set<PredId_t> allPredicates;
+    std::vector<RuleHashInfo> ruleHashInfos; ruleHashInfos.reserve(rules.size());
+    for (const Rule &currentRule : rules)
+    {
+        ruleHashInfos.push_back(ruleHashInfoFirst(currentRule));
+    }
+
+    std::unordered_map<PredId_t, std::vector<size_t>> bodyToMap;
+    std::unordered_map<std::string, bool> resultCache;
 
     for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
     {
         const Rule &markedRule = markedRules[ruleIndex];
-
-        for (const Literal &currentLiteral : markedRule.getHeads())
-        {
-            PredId_t currentPredId = currentLiteral.getPredicate().getId();
-
-            headFromMap[currentPredId].push_back(ruleIndex);
-            allPredicates.insert(currentPredId);
-        }
 
         for (const Literal &currentLiteral : markedRule.getBody())
         {
             PredId_t currentPredId = currentLiteral.getPredicate().getId();
 
             bodyToMap[currentPredId].push_back(ruleIndex);
-            allPredicates.insert(currentPredId);
         }
     }
 
-    unsigned numCalls = 0;
-    std::unordered_set<uint64_t> proccesedPairs;
-    for (PredId_t currentPredicate : allPredicates)
-    {
-        auto fromIterator = headFromMap.find(currentPredicate);
-        auto toIterator = bodyToMap.find(currentPredicate);
+    std::chrono::system_clock::time_point timepointStart = std::chrono::system_clock::now();
+    globalPositiveTimepointStart = timepointStart;
+    globalPositiveTimeout = timeoutMilliSeconds;
 
-        if (fromIterator == headFromMap.end() || toIterator == bodyToMap.end())
-            continue;
+    uint64_t numCalls = 0;
 
-        for (size_t ruleFrom : fromIterator->second)
+    enum RelianceExecutionCommand {
+        None,
+        Continue,
+        Return
+    };
+
+    auto relianceExecution = [&] (size_t ruleFrom, size_t ruleTo, std::unordered_set<size_t> &proccesedRules) {
+        if ((strat & RelianceStrategy::CutPairs) > 0)
         {
-            for (size_t ruleTo : toIterator->second)
-            {
-        // for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
-        // {
-        //     for (size_t ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
-        //     {
-                uint64_t hash = ruleFrom * rules.size() + ruleTo;
-                if (proccesedPairs.find(hash) != proccesedPairs.end())
-                    continue;
-                proccesedPairs.insert(hash);
+            if (proccesedRules.find(ruleTo) != proccesedRules.end())
+                return RelianceExecutionCommand::Continue;
 
-                unsigned variableCountFrom = variableCounts[ruleFrom];
-                unsigned variableCountTo = variableCounts[ruleTo];
-                
-                ++numCalls;
-                if (positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat))
+            proccesedRules.insert(ruleTo);
+        }
+
+        if (globalPositiveTimeout != 0 && globalPositiveTimeoutCheckCount % 1000 == 0)
+        {
+            unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalPositiveTimepointStart).count();
+            if (currentTimeMilliSeconds > globalPositiveTimeout)
+            {
+                globalPositiveIsTimeout = true;
+                result.timeout = true;
+                result.numberOfCalls = numCalls;
+                return RelianceExecutionCommand::Return;
+            }
+        }
+
+        ++globalPositiveTimeoutCheckCount;
+
+        std::string stringHash;
+        if ((strat & RelianceStrategy::PairHash) > 0)
+        {
+            stringHash = rulePairHash(ruleHashInfos[ruleFrom], ruleHashInfos[ruleTo], rules[ruleTo]);
+            auto cacheIterator = resultCache.find(stringHash);
+            if (cacheIterator != resultCache.end())
+            {
+                if (cacheIterator->second)
                 {
-                    result.addEdge(ruleFrom, ruleTo);
-                    resultTransposed.addEdge(ruleTo, ruleFrom);
+                    result.graphs.first.addEdge(ruleFrom, ruleTo);
+                    result.graphs.second.addEdge(ruleTo, ruleFrom);
+                }
+
+                return RelianceExecutionCommand::Continue;
+            }
+        }
+
+        ++numCalls;
+
+        unsigned variableCountFrom = variableCounts[ruleFrom];
+        unsigned variableCountTo = variableCounts[ruleTo];
+        
+        bool isReliance = positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat);
+        if (isReliance)
+        {
+            result.graphs.first.addEdge(ruleFrom, ruleTo);
+            result.graphs.second.addEdge(ruleTo, ruleFrom);
+        }
+
+        if (((strat & RelianceStrategy::PairHash) > 0) && (resultCache.size() < rulePairCacheSize))
+        {
+            resultCache[stringHash] = isReliance;
+        }
+
+        if (globalPositiveIsTimeout)
+        {
+            std::cout << "Timeout-Rule-Positive: " 
+                << rules[ruleFrom].tostring() << " -> " << rules[ruleTo].tostring() << '\n'; 
+            
+            result.numberOfCalls = numCalls;
+            result.timeout = true;
+            return RelianceExecutionCommand::Return;
+        }
+
+        return RelianceExecutionCommand::None;
+    };
+
+    if ((strat & RelianceStrategy::CutPairs) > 0)
+    {
+        for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+        {
+            std::unordered_set<size_t> proccesedRules;
+
+            for (const Literal &currentLiteral : rules[ruleFrom].getHeads())
+            {
+                PredId_t currentPredicate = currentLiteral.getPredicate().getId();
+                auto toIterator = bodyToMap.find(currentPredicate);
+
+                if (toIterator == bodyToMap.end())
+                    continue;
+                
+                for (size_t ruleTo : toIterator->second)
+                {
+                    switch (relianceExecution(ruleFrom, ruleTo, proccesedRules))
+                    {
+                        case RelianceExecutionCommand::Return:
+                            return result;
+                        case RelianceExecutionCommand::Continue:
+                            continue;
+                    }
                 }
             }
         }
     }
+    else
+    {
+        std::unordered_set<size_t> proccesedRules;
 
-    std::cout << "Pos Calls: " << numCalls << '\n';
+        for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+        {
+            for (size_t ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+            {
+                switch (relianceExecution(ruleFrom, ruleTo, proccesedRules))
+                {
+                    case RelianceExecutionCommand::Return:
+                        return result;
+                    case RelianceExecutionCommand::Continue:
+                        continue;
+                }
+            }
+        }
+    }    
+    
+    result.timeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - timepointStart).count();
+    result.timeout = false;
+    result.numberOfCalls = numCalls;
 
-    return std::make_pair(result, resultTransposed);
+    return result;
 }
 
 unsigned DEBUGcountFakePositiveReliances(const std::vector<Rule> &rules, const SimpleGraph &positiveGraph)

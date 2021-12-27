@@ -6,4 +6,4 @@
 #include <iostream>
 #include <string>
 
-void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat);
+void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds);

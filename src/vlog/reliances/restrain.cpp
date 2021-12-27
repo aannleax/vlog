@@ -7,6 +7,11 @@
 #include <unordered_map>
 #include <unordered_set>
 
+std::chrono::system_clock::time_point globalRestraintTimepointStart;
+unsigned globalRestraintTimeout = 0;
+unsigned globalRestraintTimeoutCheckCount = 0;
+bool globalRestraintIsTimeout = false;
+
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo, 
     const VariableAssignments &assignments,
@@ -191,6 +196,18 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments, RelianceStrategy strat)
 {
+    if (globalRestraintTimeout != 0 && globalRestraintTimeoutCheckCount % 1000 == 0)
+    {
+        unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalRestraintTimepointStart).count();
+        if (currentTimeMilliSeconds > globalRestraintTimeout)
+        {
+          globalRestraintIsTimeout = true;
+          return true;
+        }
+    }
+
+    ++globalRestraintTimeoutCheckCount;
+
     unsigned headToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
     for (unsigned headToIndex = headToStartIndex; headToIndex < ruleTo.getHeads().size(); ++headToIndex)
@@ -228,9 +245,10 @@ bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
 }
 
 
-std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat)
+RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat, unsigned timeoutMilliSeconds)
 {
-    SimpleGraph result(rules.size()), resultTransposed(rules.size());
+    RelianceComputationResult result;
+    result.graphs = std::pair<SimpleGraph, SimpleGraph>(SimpleGraph(rules.size()), SimpleGraph(rules.size()));
     
     std::vector<Rule> markedRules;
     markedRules.reserve(rules.size());
@@ -252,7 +270,14 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<R
         markedRules.push_back(markedRule);
     }
 
-    std::unordered_map<PredId_t, std::vector<size_t>> headFromMap, headToMap;
+    std::vector<RuleHashInfo> ruleHashInfos; ruleHashInfos.reserve(rules.size());
+    for (const Rule &currentRule : rules)
+    {
+        ruleHashInfos.push_back(ruleHashInfoFirst(currentRule));
+    }
+
+    std::unordered_map<PredId_t, std::vector<size_t>> headToMap;
+    std::unordered_map<std::string, bool> resultCache;
 
     for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
     {   
@@ -272,50 +297,157 @@ std::pair<SimpleGraph, SimpleGraph> computeRestrainReliances(const std::vector<R
                 }
             }
 
-            headFromMap[currentLiteral.getPredicate().getId()].push_back(ruleIndex);
-
             std::vector<size_t> &headToVector = headToMap[currentLiteral.getPredicate().getId()];
             if (containsExistentialVariable)
                 headToVector.push_back(ruleIndex);
         }
     }
 
-    unsigned numCalls = 0;
-    std::unordered_set<uint64_t> proccesedPairs;
-    for (auto iteratorFrom : headFromMap)
-    {
-        auto iteratorTo = headToMap.find(iteratorFrom.first);
-        
-        if (iteratorTo == headToMap.end())
-            continue;
+    std::chrono::system_clock::time_point timepointStart = std::chrono::system_clock::now();
+    globalRestraintTimepointStart = timepointStart;
+    globalRestraintTimeout = timeoutMilliSeconds;
 
-        for (size_t ruleFrom : iteratorFrom.second)
+    uint64_t numCalls = 0;
+
+    enum class RelianceExecutionCommand {
+        None,
+        Continue,
+        Return
+    };
+
+    auto relianceExecution = [&] (size_t ruleFrom, size_t ruleTo, std::unordered_set<size_t> &proccesedRules) -> RelianceExecutionCommand {
+        if ((strat & RelianceStrategy::CutPairs) > 0)
         {
-            for (size_t ruleTo : iteratorTo->second)
+            if (proccesedRules.find(ruleTo) != proccesedRules.end())
+                return RelianceExecutionCommand::Continue;
+
+            proccesedRules.insert(ruleTo);
+        }
+
+        if (globalRestraintTimeout != 0 && globalRestraintTimeoutCheckCount % 1000 == 0)
+        {
+            unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalRestraintTimepointStart).count();
+            if (currentTimeMilliSeconds > globalRestraintTimeout)
             {
-        // for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
-        // {
-        //     for (size_t ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
-        //     {
-                uint64_t hash = ruleFrom * rules.size() + ruleTo;
-                if (proccesedPairs.find(hash) != proccesedPairs.end())
-                    continue;
-                proccesedPairs.insert(hash);
+                globalRestraintIsTimeout = true;
+                result.timeout = true;
+                result.numberOfCalls = numCalls;
+                return RelianceExecutionCommand::Return;
+            }
+        }
+        ++globalRestraintTimeoutCheckCount;
 
-                unsigned variableCountFrom = variableCounts[ruleFrom];
-                unsigned variableCountTo = variableCounts[ruleTo];
-
-                numCalls++;
-                if (restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat))
+        std::string stringHash;
+        if ((strat & RelianceStrategy::PairHash) > 0)
+        {
+            stringHash = rulePairHash(ruleHashInfos[ruleFrom], ruleHashInfos[ruleTo], rules[ruleTo]);
+        
+            auto cacheIterator = resultCache.find(stringHash);
+            if (cacheIterator != resultCache.end())
+            {
+                if (cacheIterator->second)
                 {
-                    result.addEdge(ruleFrom, ruleTo);
-                    resultTransposed.addEdge(ruleTo, ruleFrom);
+                    result.graphs.first.addEdge(ruleFrom, ruleTo);
+                    result.graphs.second.addEdge(ruleTo, ruleFrom);
+                }
+
+                return RelianceExecutionCommand::Continue;
+            }
+        }
+
+        ++numCalls;
+
+        unsigned variableCountFrom = variableCounts[ruleFrom];
+        unsigned variableCountTo = variableCounts[ruleTo];
+
+        if (ruleFrom == ruleTo)
+        {
+            std::vector<Rule> splitRules;
+            splitIntoPieces(rules[ruleFrom], splitRules);
+
+            if (splitRules.size() > 1)
+            {
+                result.graphs.first.addEdge(ruleFrom, ruleTo);
+                result.graphs.second.addEdge(ruleTo, ruleFrom);
+            }
+        }
+        
+        bool isReliance = restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat);
+        if (isReliance)
+        {
+            result.graphs.first.addEdge(ruleFrom, ruleTo);
+            result.graphs.second.addEdge(ruleTo, ruleFrom);
+        }
+
+        if (((strat & RelianceStrategy::PairHash) > 0) && (resultCache.size() < rulePairCacheSize))
+        {
+            resultCache[stringHash] = isReliance;
+        }
+
+        if (globalRestraintIsTimeout)
+        {
+            std::cout << "Timeout-Rule-Restraint: " 
+                << rules[ruleFrom].tostring() << " -> " << rules[ruleTo].tostring() << '\n'; 
+
+            result.numberOfCalls = numCalls;
+            result.timeout = true;
+            return RelianceExecutionCommand::Return;
+        }
+
+        return RelianceExecutionCommand::None;
+    };
+
+    if ((strat & RelianceStrategy::CutPairs) > 0)
+    {
+        for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+        {
+            std::unordered_set<size_t> proccesedRules;
+
+            for (const Literal &currentLiteral : rules[ruleFrom].getHeads())
+            {
+                PredId_t currentPredicate = currentLiteral.getPredicate().getId();
+                auto toIterator = headToMap.find(currentPredicate);
+
+                if (toIterator == headToMap.end())
+                    continue;
+                
+                for (size_t ruleTo : toIterator->second)
+                {
+                    switch (relianceExecution(ruleFrom, ruleTo, proccesedRules))
+                    {
+                        case RelianceExecutionCommand::Return:
+                            return result;
+                        case RelianceExecutionCommand::Continue:
+                            continue;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        std::unordered_set<size_t> proccesedRules;
+
+        for (size_t ruleFrom = 0; ruleFrom < rules.size(); ++ruleFrom)
+        {
+            for (size_t ruleTo = 0; ruleTo < rules.size(); ++ruleTo)
+            {
+                switch (relianceExecution(ruleFrom, ruleTo, proccesedRules))
+                {
+                    case RelianceExecutionCommand::Return:
+                        return result;
+                    case RelianceExecutionCommand::Continue:
+                        continue;
                 }
             }
         }
     }
 
-    std::cout << "Res Calls: " << numCalls << '\n';
+    
 
-    return std::make_pair(result, resultTransposed);
+    result.timeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - timepointStart).count();
+    result.timeout = false;
+    result.numberOfCalls = numCalls;
+
+    return result;
 }

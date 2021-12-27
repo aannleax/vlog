@@ -380,7 +380,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::chrono::system_clock::time_point relianceStart = std::chrono::system_clock::now();
     std::cout << "Computing positive reliances..." << '\n';
-    std::pair<SimpleGraph, SimpleGraph> positiveGraphs = computePositiveReliances(allRules);
+    RelianceComputationResult positiveResult = computePositiveReliances(allRules);
+    std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
    
     // positiveGraphs.first.saveCSV("positive_final.csv");
 
@@ -392,7 +393,8 @@ void SemiNaiverOrdered::run(size_t lastExecution,
 
     std::cout << "Computing restraint reliances..." << '\n';
     relianceStart = std::chrono::system_clock::now();
-    std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = computeRestrainReliances(allRules);
+    RelianceComputationResult restrainResult = computeRestrainReliances(allRules);
+    std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = restrainResult.graphs;
     std::cout << "Restraint computation took " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0 << '\n';
 
     // restrainingGraphs.first.saveCSV("blocking_final.csv");

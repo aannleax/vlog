@@ -20,7 +20,8 @@ enum RelianceStrategy : int32_t
     EarlyTermination = 1,
     CutPairs = 2,
     PairHash = 4,
-    Full = 7
+    BetterIterate = 8,
+    Full = 15
 };
 
 struct SimpleGraph
@@ -82,6 +83,13 @@ struct RelianceComputationResult
     uint64_t numberOfCalls;
     bool timeout;
     unsigned timeMilliSeconds = 0;
+};
+
+enum class RelianceCheckResult
+{
+    True,
+    False,
+    Extend,
 };
 
 struct CoreStratifiedResult

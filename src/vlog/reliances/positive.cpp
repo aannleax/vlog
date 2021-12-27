@@ -11,6 +11,24 @@ unsigned globalPositiveTimeout = 0;
 unsigned globalPositiveTimeoutCheckCount = 0;
 bool globalPositiveIsTimeout = false;
 
+bool positiveIsTimeout(bool rare)
+{
+    if (globalPositiveTimeout == 0)
+        return false;
+
+    if (!rare || globalPositiveTimeoutCheckCount++ % 100 == 0)
+    {
+        unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalPositiveTimepointStart).count();
+        if (currentTimeMilliSeconds > globalPositiveTimeout)
+        {
+            globalPositiveIsTimeout = true;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
     VariableAssignments &assignments)
 {
@@ -62,10 +80,9 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
     const VariableAssignments &assignments,
     RelianceStrategy strat);
 
-bool positiveCheck(std::vector<unsigned> &mappingDomain, 
+RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments,
-    RelianceStrategy strat)
+    const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toBodyLiterals = ruleTo.getBody();
@@ -88,15 +105,12 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     if (!positiveCheckNullsInToBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From))
     {
-        if ((strat & RelianceStrategy::EarlyTermination) > 0)
-            return false;
-        else
-            return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::False;
     }
 
     if (!positiveCheckNullsInToBody(notMappedToBodyLiterals, assignments, RelianceRuleRelation::To))
     {
-        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::Extend;
     }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
@@ -115,7 +129,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     if (fromRuleSatisfied)
     {
-        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::Extend;
     }
 
     satisfied.clear();
@@ -133,10 +147,7 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
 
     if (toBodySatisfied)
     {
-        if ((strat & RelianceStrategy::EarlyTermination) > 0)
-            return false;
-        else
-            return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::Extend;
     }
 
     satisfied.clear();
@@ -152,7 +163,10 @@ bool positiveCheck(std::vector<unsigned> &mappingDomain,
         toRuleSatisfied = checkConsistentExistential(existentialMappings);
     }
 
-    return !toRuleSatisfied;
+    if (toRuleSatisfied)
+        return RelianceCheckResult::False;
+    else
+        return RelianceCheckResult::True;
 }
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
@@ -160,17 +174,8 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
     const VariableAssignments &assignments,
     RelianceStrategy strat)
 {
-    if (globalPositiveTimeout != 0 && globalPositiveTimeoutCheckCount % 1000 == 0)
-    {
-        unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalPositiveTimepointStart).count();
-        if (currentTimeMilliSeconds > globalPositiveTimeout)
-        {
-            globalPositiveIsTimeout = true;
-            return true;
-        }
-    }
-
-    ++globalPositiveTimeoutCheckCount;
+    if (positiveIsTimeout(true))
+        return true;
 
     unsigned bodyToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
@@ -190,8 +195,24 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
             if (!positiveExtendAssignment(literalFrom, literalTo, extendedAssignments))
                 continue;
 
-            if (positiveCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
-                return true;
+            switch (positiveCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
+            {
+                case RelianceCheckResult::Extend:
+                {
+                    return positiveExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                } break;
+
+                case RelianceCheckResult::False:
+                {
+                    if ((strat & RelianceStrategy::EarlyTermination) == 0)
+                        return positiveExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                } break;
+
+                case RelianceCheckResult::True:
+                {
+                    return true;
+                }
+            }
         }
 
         mappingDomain.pop_back();
@@ -200,13 +221,79 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
     return false;
 }
 
+bool positiveFullIteration(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo,
+    RelianceStrategy strat, std::vector<size_t> &atomMapping, size_t index)
+{
+    size_t targetSize = ruleFrom.getHeads().size() + 1; // +1 because it can be unassigned
+
+    for(atomMapping[index] = 0; atomMapping[index] < targetSize; atomMapping[index]++)
+    {
+        if(index == atomMapping.size() - 1)
+        {
+            if (positiveIsTimeout(true))
+                return true;
+
+            // atomMapping now contains a valid mapping
+            std::vector<unsigned> currentMappingDomain;
+            VariableAssignments currentAssignments(variableCountFrom, variableCountTo);
+            bool validAssignments = true;
+
+            for (unsigned bodyToIndex = 0; bodyToIndex < atomMapping.size(); ++bodyToIndex)
+            {
+                unsigned headFromIndex = (unsigned)atomMapping[bodyToIndex];
+                if (headFromIndex == 0)
+                    continue;
+                
+                currentMappingDomain.push_back(bodyToIndex);
+
+                const Literal &literalTo = ruleTo.getBody().at(bodyToIndex);
+                const Literal &literalFrom =  ruleFrom.getHeads().at(headFromIndex - 1);
+
+                if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId()
+                    || !positiveExtendAssignment(literalFrom, literalTo, currentAssignments))
+                {
+                    validAssignments = false;
+                    break;
+                }
+            }
+
+            if (currentMappingDomain.size() == 0 || !validAssignments)
+                continue;
+
+            if (positiveCheck(currentMappingDomain, ruleFrom, ruleTo, currentAssignments) == RelianceCheckResult::True)
+                return true;
+        }
+        else
+        {
+            if (positiveFullIteration(ruleFrom, variableCountFrom, ruleTo, variableCountTo, strat, 
+                atomMapping, index + 1))
+            {
+                return true;   
+            }
+        }
+    }
+
+    return false;
+}
+
 bool positiveReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo,
     RelianceStrategy strat)
 {
-    std::vector<unsigned> mappingDomain;
-    VariableAssignments assignments(variableCountFrom, variableCountTo);
+    if ((strat & RelianceStrategy::BetterIterate) > 0)
+    {
+        std::vector<unsigned> mappingDomain;
+        VariableAssignments assignments(variableCountFrom, variableCountTo);
 
-    return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return positiveExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+    }
+    else
+    {
+        std::vector<size_t> atomMapping;
+        atomMapping.resize(ruleTo.getBody().size(), 0);
+
+        return positiveFullIteration(ruleFrom, variableCountFrom, ruleTo, variableCountTo, 
+            strat, atomMapping, 0);
+    }
 }
 
 RelianceComputationResult computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat, unsigned timeoutMilliSeconds)
@@ -284,19 +371,12 @@ RelianceComputationResult computePositiveReliances(const std::vector<Rule> &rule
             proccesedRules.insert(ruleTo);
         }
 
-        if (globalPositiveTimeout != 0 && globalPositiveTimeoutCheckCount % 1000 == 0)
+        if (positiveIsTimeout(false))
         {
-            unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalPositiveTimepointStart).count();
-            if (currentTimeMilliSeconds > globalPositiveTimeout)
-            {
-                globalPositiveIsTimeout = true;
-                result.timeout = true;
-                result.numberOfCalls = numCalls;
-                return RelianceExecutionCommand::Return;
-            }
+            result.timeout = true;
+            result.numberOfCalls = numCalls;
+            return RelianceExecutionCommand::Return;
         }
-
-        ++globalPositiveTimeoutCheckCount;
 
         std::string stringHash;
         if ((strat & RelianceStrategy::PairHash) > 0)

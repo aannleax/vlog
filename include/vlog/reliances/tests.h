@@ -28,4 +28,4 @@ struct TestCase
     }
 };
 
-void performTests(const std::string &ruleFolder);
+void performTests(const std::string &ruleFolder, RelianceStrategy strat);

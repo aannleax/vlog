@@ -15,7 +15,7 @@ bool graphContained(const SimpleGraph &left, const SimpleGraph &right)
     return true;
 }
 
-bool performSingleTest(const std::string &ruleFolder, const TestCase &test)
+bool performSingleTest(const std::string &ruleFolder, const TestCase &test, RelianceStrategy strat)
 {
     EDBConf emptyConf("", false);
     EDBLayer edbLayer(emptyConf, false);
@@ -33,12 +33,12 @@ bool performSingleTest(const std::string &ruleFolder, const TestCase &test)
 
     if (test.type == TestCase::Type::Positive)
     {
-        RelianceComputationResult compResult = computePositiveReliances(allRules);
+        RelianceComputationResult compResult = computePositiveReliances(allRules, strat);
         graphs = compResult.graphs;
     }
     else 
     {
-        RelianceComputationResult compResult = computeRestrainReliances(allRules);
+        RelianceComputationResult compResult = computeRestrainReliances(allRules, strat);
         graphs = compResult.graphs;
     }
 
@@ -47,7 +47,7 @@ bool performSingleTest(const std::string &ruleFolder, const TestCase &test)
 
 typedef std::vector<std::vector<size_t>> Edges;
 
-void performTests(const std::string &ruleFolder)
+void performTests(const std::string &ruleFolder, RelianceStrategy strat)
 {
     std::vector<TestCase> cases;
     cases.emplace_back(TestCase::Type::Positive, "pos_basic.dl", Edges{{1}, {}});
@@ -83,7 +83,7 @@ void performTests(const std::string &ruleFolder)
 
     for (const TestCase &test : cases)
     {
-        if (!performSingleTest(ruleFolder, test))
+        if (!performSingleTest(ruleFolder, test, strat))
         {
             std::cout << test.name << " failed." << std::endl;
 

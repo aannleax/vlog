@@ -718,7 +718,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
 
     if (isTest)
     {
-        performTests(pathRules);
+        performTests(pathRules, (RelianceStrategy)strategy);
     }
     else
     {

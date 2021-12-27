@@ -12,6 +12,24 @@ unsigned globalRestraintTimeout = 0;
 unsigned globalRestraintTimeoutCheckCount = 0;
 bool globalRestraintIsTimeout = false;
 
+bool restrainIsTimeout(bool rare)
+{
+    if (globalRestraintTimeout == 0)
+        return false;
+
+    if (!rare || globalRestraintTimeoutCheckCount++ % 100 == 0)
+    {
+        unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalRestraintTimepointStart).count();
+        if (currentTimeMilliSeconds > globalRestraintTimeout)
+        {
+            globalRestraintIsTimeout = true;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo, 
     const VariableAssignments &assignments,
@@ -62,10 +80,9 @@ bool restrainCheckNullsInBody(const std::vector<Literal> &literals,
     return true;   
 }
 
-bool restrainCheck(std::vector<unsigned> &mappingDomain, 
+RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments,
-    RelianceStrategy strat)
+    const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toHeadLiterals = ruleTo.getHeads();
@@ -88,21 +105,13 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
 
     if (!restrainCheckNullsInBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From)
             || !restrainCheckNullsInBody(ruleTo.getBody(), assignments, RelianceRuleRelation::To))
-    {
-        if ((strat & RelianceStrategy::EarlyTermination) > 0)
-            return false;
-        else
-            return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
-    }
-
+        return RelianceCheckResult::False;
 
     if (!assignments.hasMappedExistentialVariable)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::Extend;
 
     if (!checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments))
-    {
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
-    }
+        return RelianceCheckResult::Extend;
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
@@ -118,12 +127,7 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (toHeadSatisfied)
-    {
-        if ((strat & RelianceStrategy::EarlyTermination) > 0)
-            return false;
-        else
-            return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
-    }
+        return RelianceCheckResult::False;
 
     prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
     satisfied.clear();
@@ -140,7 +144,7 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (alternativeMatchAlreadyPresent)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::Extend;
 
     prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
     satisfied.clear();
@@ -157,9 +161,9 @@ bool restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (fromHeadSatisfied)
-        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+        return RelianceCheckResult::Extend;
 
-    return true;
+    return RelianceCheckResult::True;
 }
 
 bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
@@ -196,17 +200,8 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments, RelianceStrategy strat)
 {
-    if (globalRestraintTimeout != 0 && globalRestraintTimeoutCheckCount % 1000 == 0)
-    {
-        unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalRestraintTimepointStart).count();
-        if (currentTimeMilliSeconds > globalRestraintTimeout)
-        {
-          globalRestraintIsTimeout = true;
-          return true;
-        }
-    }
-
-    ++globalRestraintTimeoutCheckCount;
+    if (restrainIsTimeout(true))
+        return true;
 
     unsigned headToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
 
@@ -226,8 +221,24 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
             if (!restrainExtendAssignment(literalFrom, literalTo, extendedAssignments))
                 continue;
 
-            if (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
-                return true;
+            switch (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
+            {
+                case RelianceCheckResult::Extend:
+                {
+                    return restrainExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                } break;
+
+                case RelianceCheckResult::False:
+                {
+                    if ((strat & RelianceStrategy::EarlyTermination) == 0)
+                        return restrainExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                } break;
+
+                case RelianceCheckResult::True:
+                {
+                    return true;
+                }
+            }
         }
 
         mappingDomain.pop_back();
@@ -236,14 +247,79 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     return false;
 }
 
-bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo, RelianceStrategy strat)
+bool restrainFullIteration(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo,
+    RelianceStrategy strat, std::vector<size_t> &atomMapping, size_t index)
 {
-    std::vector<unsigned> mappingDomain;
-    VariableAssignments assignments(variableCountFrom, variableCountTo);
+    size_t targetSize = ruleFrom.getHeads().size() + 1; // +1 because it can be unassigned
 
-    return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+    for(atomMapping[index] = 0; atomMapping[index] < targetSize; atomMapping[index]++)
+    {
+        if(index == atomMapping.size() - 1)
+        {
+            if (restrainIsTimeout(true))
+                return true;
+
+            // atomMapping now contains a valid mapping
+            std::vector<unsigned> currentMappingDomain;
+            VariableAssignments currentAssignments(variableCountFrom, variableCountTo);
+            bool validAssignments = true;
+
+            for (unsigned headToIndex = 0; headToIndex < atomMapping.size(); ++headToIndex)
+            {
+                unsigned headFromIndex = (unsigned)atomMapping[headToIndex];
+                if (headFromIndex == 0)
+                    continue;
+                
+                currentMappingDomain.push_back(headToIndex);
+
+                const Literal &literalTo = ruleTo.getHeads().at(headToIndex);
+                const Literal &literalFrom =  ruleFrom.getHeads().at(headFromIndex - 1);
+
+                if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId()
+                    || !restrainExtendAssignment(literalFrom, literalTo, currentAssignments))
+                {
+                    validAssignments = false;
+                    break;
+                }
+            }
+
+            if (currentMappingDomain.size() == 0 || !validAssignments)
+                continue;
+
+            if (restrainCheck(currentMappingDomain, ruleFrom, ruleTo, currentAssignments) == RelianceCheckResult::True)
+                return true;
+        }
+        else
+        {
+            if (restrainFullIteration(ruleFrom, variableCountFrom, ruleTo, variableCountTo, strat, 
+                atomMapping, index + 1))
+            {
+                return true;   
+            }
+        }
+    }
+
+    return false;
 }
 
+bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo, RelianceStrategy strat)
+{
+    if ((strat & RelianceStrategy::BetterIterate) > 0)
+    {
+        std::vector<unsigned> mappingDomain;
+        VariableAssignments assignments(variableCountFrom, variableCountTo);
+
+        return restrainExtend(mappingDomain, ruleFrom, ruleTo, assignments, strat);
+    }
+    else
+    {
+        std::vector<size_t> atomMapping;
+        atomMapping.resize(ruleTo.getHeads().size(), 0);
+
+        return restrainFullIteration(ruleFrom, variableCountFrom, ruleTo, variableCountTo, 
+            strat, atomMapping, 0);
+    }
+}
 
 RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat, unsigned timeoutMilliSeconds)
 {
@@ -324,18 +400,12 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
             proccesedRules.insert(ruleTo);
         }
 
-        if (globalRestraintTimeout != 0 && globalRestraintTimeoutCheckCount % 1000 == 0)
+        if (restrainIsTimeout(false))
         {
-            unsigned currentTimeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - globalRestraintTimepointStart).count();
-            if (currentTimeMilliSeconds > globalRestraintTimeout)
-            {
-                globalRestraintIsTimeout = true;
-                result.timeout = true;
-                result.numberOfCalls = numCalls;
-                return RelianceExecutionCommand::Return;
-            }
+            result.timeout = true;
+            result.numberOfCalls = numCalls;
+            return RelianceExecutionCommand::Return;
         }
-        ++globalRestraintTimeoutCheckCount;
 
         std::string stringHash;
         if ((strat & RelianceStrategy::PairHash) > 0)
@@ -360,7 +430,7 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
         unsigned variableCountFrom = variableCounts[ruleFrom];
         unsigned variableCountTo = variableCounts[ruleTo];
 
-        if (ruleFrom == ruleTo)
+        if (ruleFrom == ruleTo && rules[ruleFrom].isExistential())
         {
             std::vector<Rule> splitRules;
             splitIntoPieces(rules[ruleFrom], splitRules);

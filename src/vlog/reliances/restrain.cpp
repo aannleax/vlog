@@ -161,13 +161,13 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (fromHeadSatisfied)
-        return RelianceCheckResult::Extend;
+        return RelianceCheckResult::False;
 
     return RelianceCheckResult::True;
 }
 
 bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
-    VariableAssignments &assignments)
+    VariableAssignments &assignments, RelianceStrategy strat)
 {
     unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
 
@@ -180,7 +180,8 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
         TermInfo toInfo = getTermInfoUnify(toTerm, assignments, RelianceRuleRelation::To);
 
          // We may not assign any universal variable to a null
-        if ((toInfo.type == TermInfo::Types::Universal || fromInfo.type == TermInfo::Types::Universal) 
+        if (((strat & RelianceStrategy::EarlyTermination) > 0) &&
+            (toInfo.type == TermInfo::Types::Universal || fromInfo.type == TermInfo::Types::Universal) 
             && (fromInfo.constant < 0 || toInfo.constant < 0))
             return false;
 
@@ -218,26 +219,28 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
                 continue;
 
             VariableAssignments extendedAssignments = assignments;
-            if (!restrainExtendAssignment(literalFrom, literalTo, extendedAssignments))
+            if (!restrainExtendAssignment(literalFrom, literalTo, extendedAssignments, strat))
                 continue;
 
             switch (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
             {
                 case RelianceCheckResult::Extend:
                 {
-                    return restrainExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                    if (restrainExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
+                        return true;
                 } break;
 
                 case RelianceCheckResult::False:
                 {
-                    if ((strat & RelianceStrategy::EarlyTermination) == 0)
-                        return restrainExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                    if ((strat & RelianceStrategy::EarlyTermination) == 0
+                        && restrainExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
+                        return true;
                 } break;
 
                 case RelianceCheckResult::True:
                 {
                     return true;
-                }
+                } break;
             }
         }
 
@@ -276,7 +279,7 @@ bool restrainFullIteration(const Rule &ruleFrom, unsigned variableCountFrom, con
                 const Literal &literalFrom =  ruleFrom.getHeads().at(headFromIndex - 1);
 
                 if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId()
-                    || !restrainExtendAssignment(literalFrom, literalTo, currentAssignments))
+                    || !restrainExtendAssignment(literalFrom, literalTo, currentAssignments, strat))
                 {
                     validAssignments = false;
                     break;

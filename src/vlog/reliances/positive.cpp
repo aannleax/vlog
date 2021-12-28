@@ -30,7 +30,7 @@ bool positiveIsTimeout(bool rare)
 }
 
 bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
-    VariableAssignments &assignments)
+    VariableAssignments &assignments, RelianceStrategy strat)
 {
     unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
 
@@ -43,7 +43,8 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
         TermInfo toInfo = getTermInfoUnify(toTerm, assignments, RelianceRuleRelation::To);
 
         // We may not assign a universal variable of fromRule to a null
-        if (fromInfo.type == TermInfo::Types::Universal && toInfo.constant < 0)
+        if (((strat & RelianceStrategy::EarlyTermination) > 0)
+            && (fromInfo.type == TermInfo::Types::Universal && toInfo.constant < 0))
             return false;
 
         if (!unifyTerms(fromInfo, toInfo, assignments))
@@ -136,9 +137,8 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
     satisfied.resize(ruleTo.getBody().size(), 0);
     prepareExistentialMappings(ruleTo.getBody(), RelianceRuleRelation::To, assignments, existentialMappings);
 
-    //TODO: If phi_2 contains nulls then this check can be skipped (because there are no nulls in phi_1 and no nulls in phi_{22} -> see check in the beginning for that)
     bool toBodySatisfied = relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
-    toBodySatisfied = relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+    toBodySatisfied |= relianceModels(notMappedToBodyLiterals, RelianceRuleRelation::To, ruleTo.getBody(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
 
     if (!toBodySatisfied && ruleTo.isExistential())
     {
@@ -192,26 +192,28 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
                 continue;
 
             VariableAssignments extendedAssignments = assignments;
-            if (!positiveExtendAssignment(literalFrom, literalTo, extendedAssignments))
+            if (!positiveExtendAssignment(literalFrom, literalTo, extendedAssignments, strat))
                 continue;
 
             switch (positiveCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
             {
                 case RelianceCheckResult::Extend:
                 {
-                    return positiveExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                    if (positiveExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
+                        return true;
                 } break;
 
                 case RelianceCheckResult::False:
                 {
-                    if ((strat & RelianceStrategy::EarlyTermination) == 0)
-                        return positiveExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat);
+                    if ((strat & RelianceStrategy::EarlyTermination) == 0
+                        && positiveExtend(mappingDomain, ruleFrom, ruleTo, extendedAssignments, strat))
+                        return true;
                 } break;
 
                 case RelianceCheckResult::True:
                 {
                     return true;
-                }
+                } break;
             }
         }
 
@@ -250,7 +252,7 @@ bool positiveFullIteration(const Rule &ruleFrom, unsigned variableCountFrom, con
                 const Literal &literalFrom =  ruleFrom.getHeads().at(headFromIndex - 1);
 
                 if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId()
-                    || !positiveExtendAssignment(literalFrom, literalTo, currentAssignments))
+                    || !positiveExtendAssignment(literalFrom, literalTo, currentAssignments, strat))
                 {
                     validAssignments = false;
                     break;

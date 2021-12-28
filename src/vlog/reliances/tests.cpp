@@ -64,6 +64,8 @@ void performTests(const std::string &ruleFolder, RelianceStrategy strat)
     cases.emplace_back(TestCase::Type::Positive, "pos_psi2Ib_psi1.dl", Edges{{}, {}});
     cases.emplace_back(TestCase::Type::Positive, "pos_unif_1.dl", Edges{{}, {}});
     cases.emplace_back(TestCase::Type::Positive, "pos_unif_2.dl", Edges{{}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_psi1Ia_ext.dl", Edges{{1}, {}});
+    cases.emplace_back(TestCase::Type::Positive, "pos_phi2Ia_ext.dl", Edges{{1}, {}});
 
     cases.emplace_back(TestCase::Type::Restraint, "res_basic_1.dl", Edges{{}, {0}});
     cases.emplace_back(TestCase::Type::Restraint, "res_basic_2.dl", Edges{{}, {0}});

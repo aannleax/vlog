@@ -36,7 +36,7 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     RelianceStrategy strat);
 
 bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals, 
-    const VariableAssignments &assignments)
+    const VariableAssignments &assignments, RelianceRuleRelation relation = RelianceRuleRelation::To)
 {
     for (const Literal &literal : literals)
     {
@@ -50,7 +50,7 @@ bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals,
                 //     && assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To) != NOT_ASSIGNED)
                 //     return false;
 
-                int64_t assignedConstant = assignments.getConstant((int32_t)currentTerm.getId(), RelianceRuleRelation::To);
+                int64_t assignedConstant = assignments.getConstant((int32_t)currentTerm.getId(), relation);
                 if (assignedConstant != NOT_ASSIGNED && assignedConstant < 0)
                     return false;
             }                
@@ -161,7 +161,7 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     }
 
     if (fromHeadSatisfied)
-        return RelianceCheckResult::False;
+        return RelianceCheckResult::Extend;
 
     return RelianceCheckResult::True;
 }
@@ -305,7 +305,8 @@ bool restrainFullIteration(const Rule &ruleFrom, unsigned variableCountFrom, con
     return false;
 }
 
-bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo, RelianceStrategy strat)
+bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Rule &ruleTo, unsigned variableCountTo, 
+    RelianceStrategy strat)
 {
     if ((strat & RelianceStrategy::BetterIterate) > 0)
     {
@@ -320,6 +321,298 @@ bool restrainReliance(const Rule &ruleFrom, unsigned variableCountFrom, const Ru
         atomMapping.resize(ruleTo.getHeads().size(), 0);
 
         return restrainFullIteration(ruleFrom, variableCountFrom, ruleTo, variableCountTo, 
+            strat, atomMapping, 0);
+    }
+}
+
+// SELF-RESTRAIN 
+
+bool selfRestrainIsNullReducing(const Rule &rule, const VariableAssignments &assignments)
+{
+    std::unordered_set<int64_t> existentialVariables, assignedNulls;
+
+    for (const Literal &literal : rule.getHeads())
+    {
+        for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
+        {
+            VTerm term = literal.getTermAtPos(termIndex);
+            
+            int32_t termId = (int32_t)term.getId();
+            int64_t constant = assignments.getConstant((int32_t)term.getId(), RelianceRuleRelation::From);
+
+            if (termId < 0)
+            {
+                existentialVariables.insert(termId);
+
+                if (constant != NOT_ASSIGNED)
+                {
+                    if (constant < 0)
+                        assignedNulls.insert(constant);
+                    else
+                        return true;
+                }
+                else
+                    return true;
+            }
+        }
+    }
+
+    return assignedNulls.size() < existentialVariables.size();
+}
+
+bool selfRestrainExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
+    VariableAssignments &assignments);
+
+RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain, 
+    const Rule &rule, const VariableAssignments &assignments)
+{
+    unsigned nextInDomainIndex = 0;
+    const std::vector<Literal> toHeadLiterals = rule.getHeads();
+    std::vector<Literal> notMappedHeadLiterals;
+    notMappedHeadLiterals.reserve(rule.getHeads().size());
+    for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
+    {
+        if (headIndex == mappingDomain[nextInDomainIndex])
+        {
+            if (nextInDomainIndex < mappingDomain.size() - 1)
+            {
+                ++nextInDomainIndex;
+            }
+
+            continue;
+        }
+
+        notMappedHeadLiterals.push_back(toHeadLiterals[headIndex]);
+    }
+
+    if (!restrainCheckNullsInBody(rule.getBody(), assignments, RelianceRuleRelation::From))
+        return RelianceCheckResult::False;
+
+    if (!selfRestrainIsNullReducing(rule, assignments))
+        return RelianceCheckResult::False;
+
+    if (!checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments, RelianceRuleRelation::From))
+        return RelianceCheckResult::Extend;
+
+    std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
+    std::vector<unsigned> satisfied;
+    satisfied.resize(rule.getHeads().size(), 0);
+    prepareExistentialMappings(rule.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
+
+    bool ruleSatisfied= relianceModels(rule.getBody(), RelianceRuleRelation::From, rule.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+    ruleSatisfied |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::From, rule.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+   
+    if (!ruleSatisfied && rule.isExistential())
+    {
+        ruleSatisfied = checkConsistentExistential(existentialMappings);
+    }
+
+    if (ruleSatisfied)
+        return RelianceCheckResult::Extend;
+
+    return RelianceCheckResult::True;
+}
+
+bool selfRestrainUnifyTerms(const TermInfo &fromInfo, const TermInfo &toInfo, VariableAssignments &assignments)
+{
+    if (fromInfo.constant != NOT_ASSIGNED && toInfo.constant != NOT_ASSIGNED && fromInfo.constant != toInfo.constant)
+        return false;
+
+    if (fromInfo.type == TermInfo::Types::Constant && toInfo.type == TermInfo::Types::Constant)
+        return true;
+
+    if (fromInfo.type != TermInfo::Types::Constant && toInfo.type == TermInfo::Types::Constant)
+    {
+        assignments.assignConstants(fromInfo.termId, fromInfo.relation, toInfo.constant);
+    }
+    else if (fromInfo.type == TermInfo::Types::Constant && toInfo.type != TermInfo::Types::Constant)
+    {
+        assignments.assignConstants(toInfo.termId, toInfo.relation, fromInfo.constant);
+    }
+    else 
+    {
+        assignments.connectVariablesSelf(fromInfo.termId, toInfo.termId);
+    }
+
+    return true;
+}
+
+// does the same thing as getTermInfoUnify but keeps in mind that info is only saved in the From-portion of VairableAssignments
+TermInfo selfRestrainGetTermInfoUnify(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation)
+{
+    TermInfo result;
+    result.relation = RelianceRuleRelation::From;
+    result.termId = (int32_t)term.getId();
+
+    if (term.getId() == 0)
+    {
+        result.constant = (int64_t)term.getValue();
+        result.type = TermInfo::Types::Constant;
+    }
+    else
+    {
+        if ((int32_t)term.getId() < 0 && relation == RelianceRuleRelation::From)
+        {
+            result.constant = (int32_t)term.getId();
+            result.type = TermInfo::Types::Constant;
+        }
+        else
+        {
+            result.type = ((int32_t)term.getId() > 0) ? TermInfo::Types::Universal : TermInfo::Types::Existential;
+            result.groupId = assignments.getGroupId(term.getId(), RelianceRuleRelation::From);
+            result.constant = assignments.getConstant(term.getId(), RelianceRuleRelation::From);
+        }
+    }
+
+    return result;
+}
+
+
+bool selfRestrainExtendAssignment(const Literal &literalFrom, const Literal &literalTo,
+    VariableAssignments &assignments)
+{
+    unsigned tupleSize = literalFrom.getTupleSize(); //Should be the same as literalTo.getTupleSize()
+
+    for (unsigned termIndex = 0; termIndex < tupleSize; ++termIndex)
+    {
+        VTerm fromTerm = literalFrom.getTermAtPos(termIndex);
+        VTerm toTerm = literalTo.getTermAtPos(termIndex);
+    
+        TermInfo fromInfo = selfRestrainGetTermInfoUnify(fromTerm, assignments, RelianceRuleRelation::From);
+        TermInfo toInfo = selfRestrainGetTermInfoUnify(toTerm, assignments, RelianceRuleRelation::To);
+
+        if (!selfRestrainUnifyTerms(fromInfo, toInfo, assignments))
+            return false;
+    }
+
+    assignments.finishGroupAssignments();
+
+    return true;
+}
+
+bool selfRestrainExtend(std::vector<unsigned> &mappingDomain, const Rule &rule,
+    const VariableAssignments &assignments, RelianceStrategy strat)
+{
+    if (restrainIsTimeout(true))
+        return true;
+
+    unsigned headToStartIndex = (mappingDomain.size() == 0) ? 0 : mappingDomain.back() + 1;
+
+    for (unsigned headToIndex = headToStartIndex; headToIndex < rule.getHeads().size(); ++headToIndex)
+    {
+        const Literal &literalTo = rule.getHeads()[headToIndex];
+        mappingDomain.push_back(headToIndex);
+
+        for (unsigned headFromIndex = 0; headFromIndex < rule.getHeads().size(); ++headFromIndex)
+        {
+            const Literal &literalFrom =  rule.getHeads().at(headFromIndex);
+
+            if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId())
+                continue;
+
+            VariableAssignments extendedAssignments = assignments;
+            if (!selfRestrainExtendAssignment(literalFrom, literalTo, extendedAssignments))
+                continue;
+
+            switch (selfRestrainCheck(mappingDomain, rule, extendedAssignments))
+            {
+                case RelianceCheckResult::Extend:
+                {
+                    if (selfRestrainExtend(mappingDomain, rule, extendedAssignments, strat))
+                        return true;
+                } break;
+
+                case RelianceCheckResult::False:
+                {
+                    if ((strat & RelianceStrategy::EarlyTermination) == 0
+                        && selfRestrainExtend(mappingDomain, rule, extendedAssignments, strat))
+                        return true;
+                } break;
+
+                case RelianceCheckResult::True:
+                {
+                    return true;
+                } break;
+            }
+        }
+
+        mappingDomain.pop_back();
+    }
+
+    return false;
+}
+
+bool selfRestrainFullIteration(const Rule &rule, unsigned variableCount,
+    RelianceStrategy strat, std::vector<size_t> &atomMapping, size_t index)
+{
+    size_t targetSize = rule.getHeads().size() + 1; // +1 because it can be unassigned
+
+    for(atomMapping[index] = 0; atomMapping[index] < targetSize; atomMapping[index]++)
+    {
+        if(index == atomMapping.size() - 1)
+        {
+            if (restrainIsTimeout(true))
+                return true;
+
+            // atomMapping now contains a valid mapping
+            std::vector<unsigned> currentMappingDomain;
+            VariableAssignments currentAssignments(variableCount, 0);
+            bool validAssignments = true;
+
+            for (unsigned headToIndex = 0; headToIndex < atomMapping.size(); ++headToIndex)
+            {
+                unsigned headFromIndex = (unsigned)atomMapping[headToIndex];
+                if (headFromIndex == 0)
+                    continue;
+                
+                currentMappingDomain.push_back(headToIndex);
+
+                const Literal &literalTo = rule.getHeads().at(headToIndex);
+                const Literal &literalFrom =  rule.getHeads().at(headFromIndex - 1);
+
+                if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId()
+                    || !selfRestrainExtendAssignment(literalFrom, literalTo, currentAssignments))
+                {
+                    validAssignments = false;
+                    break;
+                }
+            }
+
+            if (currentMappingDomain.size() == 0 || !validAssignments)
+                continue;
+
+            if (selfRestrainCheck(currentMappingDomain, rule, currentAssignments) == RelianceCheckResult::True)
+                return true;
+        }
+        else
+        {
+            if (selfRestrainFullIteration(rule, variableCount, strat, 
+                atomMapping, index + 1))
+            {
+                return true;   
+            }
+        }
+    }
+
+    return false;
+}
+
+bool selfRestrainReliance(const Rule &rule, unsigned variableCount,
+    RelianceStrategy strat)
+{
+    if ((strat & RelianceStrategy::BetterIterate) > 0)
+    {
+        std::vector<unsigned> mappingDomain;
+        VariableAssignments assignments(variableCount, 0);
+
+        return selfRestrainExtend(mappingDomain, rule, assignments, strat);
+    }
+    else
+    {
+        std::vector<size_t> atomMapping;
+        atomMapping.resize(rule.getHeads().size(), 0);
+
+        return selfRestrainFullIteration(rule, variableCount, 
             strat, atomMapping, 0);
     }
 }
@@ -446,6 +739,12 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
         }
         
         bool isReliance = restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat);
+
+        if (ruleFrom == ruleTo && rules[ruleFrom].isExistential() && !isReliance)
+        {
+            isReliance = selfRestrainReliance(markedRules[ruleFrom], variableCountFrom, strat);    
+        }
+
         if (isReliance)
         {
             result.graphs.first.addEdge(ruleFrom, ruleTo);

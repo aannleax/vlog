@@ -161,6 +161,27 @@ struct VariableAssignments
         }
     }
 
+    void connectVariablesSelf(int32_t variableIdFrom, int32_t variableIdTo) 
+    {
+        variableIdFrom = std::abs(variableIdFrom);
+        variableIdTo = std::abs(variableIdTo); //Everything is in From
+
+        groupGraph.addEdge(variableIdFrom, variableIdTo);
+        groupGraph.addEdge(variableIdTo, variableIdFrom);
+
+        groupAssignments[variableIdFrom] = ASSIGNED;
+        groupAssignments[variableIdTo] = ASSIGNED;
+
+        if (constantAssignment[variableIdFrom] != NOT_ASSIGNED)
+        {
+            assignConstantsNext(variableIdTo, constantAssignment[variableIdFrom]);
+        }
+        else if (constantAssignment[variableIdTo] != NOT_ASSIGNED)
+        {
+            assignConstantsNext(variableIdFrom, constantAssignment[variableIdTo]);
+        }
+    }
+
     void assignConstants(int32_t variableId, RelianceRuleRelation relation, int64_t constant)
     {
         variableId = std::abs(variableId);

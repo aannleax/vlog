@@ -71,14 +71,14 @@ void performTests(const std::string &ruleFolder, RelianceStrategy strat)
     cases.emplace_back(TestCase::Type::Restraint, "res_basic_2.dl", Edges{{}, {0}});
     cases.emplace_back(TestCase::Type::Restraint, "res_null_1.dl", Edges{{}, {}});
     cases.emplace_back(TestCase::Type::Restraint, "res_null_2.dl", Edges{{1}, {}});
-    cases.emplace_back(TestCase::Type::Restraint, "res_null_3.dl", Edges{{1, 0}, {1}}); // Should change when self-restraints are implemented
+    cases.emplace_back(TestCase::Type::Restraint, "res_null_3.dl", Edges{{1, 0}, {1}});
     cases.emplace_back(TestCase::Type::Restraint, "res_null_4.dl", Edges{{}, {}});
     cases.emplace_back(TestCase::Type::Restraint, "res_psi1Ibm_psi2.dl", Edges{{}, {}});
     cases.emplace_back(TestCase::Type::Restraint, "res_psi2Iam_phi2.dl", Edges{{}, {}});
     cases.emplace_back(TestCase::Type::Restraint, "res_psi1Ibm_phi1phi2.dl", Edges{{}, {1}});
-    cases.emplace_back(TestCase::Type::Restraint, "res_psi1Ibm_phi1phi2psi22.dl", Edges{{}, {0}}); // Should change when self-restraints are implemented
-    cases.emplace_back(TestCase::Type::Restraint, "res_self_markus.dl", Edges{{}}); // Should change when self-restraints are implemented
-    cases.emplace_back(TestCase::Type::Restraint, "res_self_trivial.dl", Edges{{0}}); // Should change when self-restraints are implemented
+    cases.emplace_back(TestCase::Type::Restraint, "res_psi1Ibm_phi1phi2psi22.dl", Edges{{}, {0}}); 
+    cases.emplace_back(TestCase::Type::Restraint, "res_self_markus.dl", Edges{{0}}); 
+    cases.emplace_back(TestCase::Type::Restraint, "res_self_trivial.dl", Edges{{0}}); 
     cases.emplace_back(TestCase::Type::Restraint, "res_self_twice.dl", Edges{{0}});
  
     size_t numberOfFailedTests = 0;

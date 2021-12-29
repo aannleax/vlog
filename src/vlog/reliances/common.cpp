@@ -402,11 +402,14 @@ std::pair<SimpleGraph, SimpleGraph> combineGraphs(
     return std::make_pair(unionGraph, unionGraphTransposed);
 }
 
-void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex, std::vector<bool> &literalsInPieces, const std::vector<uint32_t> &existentialVariables, std::vector<Literal> &result)
+void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex, std::vector<bool> &literalsInPieces, const std::vector<uint32_t> &existentialVariables, 
+    std::vector<bool> &visited, std::vector<Literal> &result)
 {
     const Literal &currentLiteral = heads[currentLiteralIndex];
     literalsInPieces[currentLiteralIndex] = true;
-
+    visited[currentLiteralIndex] = true;
+    result.push_back(currentLiteral);
+    
     for (unsigned termIndex = 0; termIndex < currentLiteral.getTupleSize(); ++termIndex)
     {
         VTerm currentTerm = currentLiteral.getTermAtPos(termIndex);
@@ -414,9 +417,15 @@ void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex
         if (std::find(existentialVariables.begin(), existentialVariables.end(), currentTerm.getId()) == existentialVariables.end())
             continue;
 
-        for (unsigned searchIndex = currentLiteralIndex + 1; searchIndex < heads.size(); ++searchIndex)
+        for (unsigned searchIndex = 0; searchIndex < heads.size(); ++searchIndex)
         {
+            if (searchIndex == currentLiteralIndex)
+                continue;
+
             if (literalsInPieces[searchIndex])
+                continue;
+
+            if (visited[searchIndex])
                 continue;
 
             const Literal &currentSearchedLiteral = heads[searchIndex];
@@ -426,13 +435,11 @@ void createPiece(const std::vector<Literal> &heads, unsigned currentLiteralIndex
             
                 if (currentTerm.getId() == currentSearchedTerm.getId())
                 {
-                    createPiece(heads, searchIndex, literalsInPieces, existentialVariables, result);
+                    createPiece(heads, searchIndex, literalsInPieces, existentialVariables, visited, result);
                 }
             }
         }
     }
-    
-    result.push_back(currentLiteral);
 }
 
 void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules)
@@ -443,8 +450,7 @@ void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules)
 
     std::vector<Var_t> existentialVariables = rule.getExistentialVariables();
 
-    std::vector<bool> literalsInPieces;
-    literalsInPieces.resize(heads.size(), false);
+    std::vector<bool> literalsInPieces; literalsInPieces.resize(heads.size(), false);
 
     for (unsigned literalIndex = 0; literalIndex < heads.size(); ++literalIndex)
     {
@@ -453,8 +459,9 @@ void splitIntoPieces(const Rule &rule, std::vector<Rule> &outRules)
         if (literalsInPieces[literalIndex])
             continue;
 
+        std::vector<bool> visited; visited.resize(heads.size(), false);
         std::vector<Literal> newPiece;
-        createPiece(heads, literalIndex, literalsInPieces, existentialVariables, newPiece);
+        createPiece(heads, literalIndex, literalsInPieces, existentialVariables, visited, newPiece);
 
         if (newPiece.size() > 0)
         {

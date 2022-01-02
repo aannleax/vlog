@@ -739,7 +739,8 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
                 return RelianceExecutionCommand::Continue;
             }
         }
-        
+
+        std::chrono::system_clock::time_point relianceExecutionStart = std::chrono::system_clock::now();
         bool isReliance = restrainReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat);
 
         if (ruleFrom == ruleTo && rules[ruleFrom].isExistential() && !isReliance)
@@ -751,6 +752,13 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
         {
             result.graphs.first.addEdge(ruleFrom, ruleTo);
             result.graphs.second.addEdge(ruleTo, ruleFrom);
+        }
+
+        size_t relianceExecutionDurationMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceExecutionStart).count();
+        if (relianceExecutionDurationMicroseconds > result.timeLongestPairMicro)
+        {
+            result.timeLongestPairMicro = relianceExecutionDurationMicroseconds;
+            result.longestPairString = rules[ruleFrom].tostring() + " -> " + rules[ruleTo].tostring();
         }
 
         if (((strat & RelianceStrategy::PairHash) > 0) && (resultCache.size() < rulePairCacheSize))

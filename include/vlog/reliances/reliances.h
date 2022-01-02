@@ -82,7 +82,9 @@ struct RelianceComputationResult
     std::pair<SimpleGraph, SimpleGraph> graphs;
     uint64_t numberOfCalls;
     bool timeout;
-    unsigned timeMilliSeconds = 0;
+    size_t timeMilliSeconds = 0;
+    size_t timeLongestPairMicro = 0;
+    std::string longestPairString = "";
 };
 
 enum class RelianceCheckResult

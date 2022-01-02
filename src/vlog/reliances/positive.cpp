@@ -402,11 +402,18 @@ RelianceComputationResult computePositiveReliances(const std::vector<Rule> &rule
         unsigned variableCountFrom = variableCounts[ruleFrom];
         unsigned variableCountTo = variableCounts[ruleTo];
         
+        std::chrono::system_clock::time_point relianceExecutionStart = std::chrono::system_clock::now();
         bool isReliance = positiveReliance(markedRules[ruleFrom], variableCountFrom, markedRules[ruleTo], variableCountTo, strat);
         if (isReliance)
         {
             result.graphs.first.addEdge(ruleFrom, ruleTo);
             result.graphs.second.addEdge(ruleTo, ruleFrom);
+        }
+        size_t relianceExecutionDurationMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceExecutionStart).count();
+        if (relianceExecutionDurationMicroseconds > result.timeLongestPairMicro)
+        {
+            result.timeLongestPairMicro = relianceExecutionDurationMicroseconds;
+            result.longestPairString = rules[ruleFrom].tostring() + " -> " + rules[ruleTo].tostring();
         }
 
         if (((strat & RelianceStrategy::PairHash) > 0) && (resultCache.size() < rulePairCacheSize))

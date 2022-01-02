@@ -46,6 +46,12 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
     std::cout << "Calls-Restraint: " << restrainResult.numberOfCalls << '\n';
     std::cout << "Calls-Overall: " << positiveResult.numberOfCalls + restrainResult.numberOfCalls << '\n';
     
+    std::cout << "Longest-Positive: " << positiveResult.timeLongestPairMicro / 1000.0 << '\n';
+    std::cout << "Longest-Pair-Positive: " << positiveResult.longestPairString << '\n';
+    std::cout << "Longest-Restraint: " << restrainResult.timeLongestPairMicro / 1000.0 << '\n';
+    std::cout << "Longest-Pair-Restraint: " << restrainResult.longestPairString << '\n';
+    std::cout << "Longest-Overall: " << (positiveResult.timeLongestPairMicro + restrainResult.timeLongestPairMicro) / 1000.0 << '\n';
+
     if (!timeout)
     {
         std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << '\n';

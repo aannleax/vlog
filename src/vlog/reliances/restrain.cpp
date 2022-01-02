@@ -735,6 +735,8 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
             {
                 result.graphs.first.addEdge(ruleFrom, ruleTo);
                 result.graphs.second.addEdge(ruleTo, ruleFrom);
+            
+                return RelianceExecutionCommand::Continue;
             }
         }
         
@@ -814,8 +816,6 @@ RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rule
             }
         }
     }
-
-    
 
     result.timeMilliSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - timepointStart).count();
     result.timeout = false;

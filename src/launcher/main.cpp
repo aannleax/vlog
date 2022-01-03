@@ -345,7 +345,11 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "If set performs a series of tests to verify the reliance computation. Use rule parameter to supply folder containing the testing rule sets.", false);
     rel_options.add<int>("", "time", 1000,
             "Timeout per reliance.", false);
-
+    rel_options.add<bool>("", "cycles", false,
+            "If set to true runs the acyclicity experiments", false);
+    rel_options.add<bool>("", "splitPositive", true,
+            "Determines if rules should be split into positive groups (true per default)", false);
+    
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
 }
@@ -715,16 +719,22 @@ void launchRelianceComputation(ProgramArgs &vm) {
     int32_t strategy = vm["strat"].as<int32_t>();
     bool isTest = vm["test"].as<bool>();
     int timeout = vm["time"].as<int>();
+    bool isCycle = vm["cycle"].as<bool>();
+    bool splitPositive = vm["splitPositive"].as<bool>();
+    std::string algorithm = vm["alg"].as<string>();
 
     if (isTest)
     {
         performTests(pathRules, (RelianceStrategy)strategy);
     }
+    else if (isCycle)
+    {
+        experimentCycles(pathRules, algorithm, splitPositive, (unsigned)timeout);
+    }
     else
     {
         experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy, (unsigned)timeout);
     }
-
 }
 
 void execSPARQLQuery(EDBLayer &edb, ProgramArgs &vm) {

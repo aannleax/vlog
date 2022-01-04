@@ -343,7 +343,7 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Enables or disables optimizations used during reliance computation", false);
     rel_options.add<bool>("", "test", false,
             "If set performs a series of tests to verify the reliance computation. Use rule parameter to supply folder containing the testing rule sets.", false);
-    rel_options.add<int>("", "time", 1000,
+    rel_options.add<int>("", "time", 0,
             "Timeout per reliance.", false);
     rel_options.add<bool>("", "cycles", false,
             "If set to true runs the acyclicity experiments", false);
@@ -719,7 +719,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
     int32_t strategy = vm["strat"].as<int32_t>();
     bool isTest = vm["test"].as<bool>();
     int timeout = vm["time"].as<int>();
-    bool isCycle = vm["cycle"].as<bool>();
+    bool isCycle = vm["cycles"].as<bool>();
     bool splitPositive = vm["splitPositive"].as<bool>();
     std::string algorithm = vm["alg"].as<string>();
 

@@ -90,48 +90,70 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
         return;
     }
 
-    std::vector<Rule> &allOriginalRules = initialProgram.getAllRules();
+    const std::vector<Rule> &allOriginalRules = initialProgram.getAllRules();
+    RelianceGroupResult positiveGroupsResult;
 
-    auto relianceStart = std::chrono::system_clock::now();
-    RelianceComputationResult positiveResult = computePositiveReliances(allOriginalRules, RelianceStrategy::Full, timeoutMilliSeconds);
-    std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
-    double timeRelianceMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0;
-   
-    if (positiveResult.timeout)
+    if (splitPositive)
     {
-        std::cout << "Timeout: 1" << '\n';
-        return;
+        auto relianceStart = std::chrono::system_clock::now();
+
+        RelianceComputationResult positiveResult = computePositiveReliances(allOriginalRules, RelianceStrategy::Full, timeoutMilliSeconds);
+        std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
+
+        double timeRelianceMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0;
+    
+        if (positiveResult.timeout)
+        {
+            std::cout << "Timeout: 1" << '\n';
+            return;
+        }
+        else
+        {
+            std::cout << "RelianceTime: " << timeRelianceMilliseconds << " ms" << '\n';
+        }
+
+        positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
+    }
+
+    auto cycleStart = std::chrono::system_clock::now();
+    bool result = true;
+    
+    if (splitPositive)
+    {
+        for (const std::vector<unsigned> &group : positiveGroupsResult.groups)
+        {
+            Program currentProgram(&edbLayer);
+            bool containsExisitential = false;
+            for (unsigned ruleIndex : group)
+            {
+                const Rule &currentRule = allOriginalRules[ruleIndex];
+
+                if (currentRule.isExistential())
+                    containsExisitential = true;
+
+                currentProgram.addRule(currentRule.getHeads(), currentRule.getBody());
+            }
+
+            if (!containsExisitential)
+                continue;
+
+            int checkResult = Checker::check(currentProgram, algorithm, edbLayer);
+        
+            if (checkResult == 0)
+                result = false;
+        }
     }
     else
     {
-        std::cout << "RelianceTime: " << timeRelianceMilliseconds << " ms" << '\n';
+        int checkResult = Checker::check(initialProgram, algorithm, edbLayer);
+
+        result = (checkResult == 1);
     }
-
-    RelianceGroupResult positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
-
-    auto cycleStart = std::chrono::system_clock::now();
-    bool result = false;
-    for (const std::vector<unsigned> &group : positiveGroupsResult.groups)
-    {
-        Program currentProgram(&edbLayer);
-        for (unsigned ruleIndex : group)
-        {
-            const Rule &currentRule = allOriginalRules[ruleIndex];
-            currentProgram.addRule(currentRule.getHeads(), currentRule.getBody());
-        }
-
-        int checkResult = Checker::check(currentProgram, algorithm, edbLayer);
     
-        if (checkResult > 0)
-        {
-            result = true;
-            break;
-        }
-    }
 
     double timeCycleMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - cycleStart).count() / 1000.0;
    
-    std::cout << "Result: " << ((result) ? "1" : "0") << '\n';
-    std::cout << "Cycle Time: " << timeCycleMilliseconds << " ms" << '\n';
+    std::cout << "Acyclic: " << ((result) ? "1" : "0") << '\n';
+    std::cout << "Cycle-Time: " << timeCycleMilliseconds << " ms" << '\n';
     std::cout << "Timeout: 0" << '\n';
 }

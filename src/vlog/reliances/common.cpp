@@ -488,6 +488,65 @@ void fillOrder(const SimpleGraph &graph, unsigned node,
     stack.push(node);
 }
 
+void fillOrderNonRecursive(const SimpleGraph &graph, unsigned node, 
+    std::vector<unsigned> &visited, std::stack<unsigned> &stack, std::vector<bool> *activeNodes = nullptr)
+{
+    std::stack<unsigned> dfsStack;
+    dfsStack.push(node);
+
+    while (!dfsStack.empty())
+    {
+        unsigned currentNode = dfsStack.top();
+        dfsStack.pop();
+
+        if (visited[currentNode] == 1)
+            continue;
+
+        visited[currentNode] = 1;
+
+        for(unsigned adjacentNode : graph.edges[currentNode])
+        {
+            if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
+                continue;
+
+            if (visited[adjacentNode] == 0)
+                dfsStack.push(adjacentNode);
+        }
+
+        stack.push(currentNode);
+    }
+}
+
+void dfsUntilNonRecursive(const SimpleGraph &graph, unsigned node, 
+    std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup,
+    std::vector<bool> *activeNodes = nullptr)
+{
+    std::stack<unsigned> dfsStack;
+    dfsStack.push(node);
+
+    while (!dfsStack.empty())
+    {
+        unsigned currentNode = dfsStack.top();
+        dfsStack.pop();
+
+        if (visited[currentNode] == 1)
+            continue;
+
+        currentGroup.push_back(currentNode);
+
+        visited[currentNode] = 1;
+
+        for(unsigned adjacentNode : graph.edges[currentNode])
+        {
+            if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
+                continue;
+
+            if (visited[adjacentNode] == 0)
+                dfsStack.push(adjacentNode);
+        }
+    }
+}
+
 void dfsUntil(const SimpleGraph &graph, unsigned node, 
     std::vector<unsigned> &visited, std::vector<unsigned> &currentGroup,
     std::vector<bool> *activeNodes = nullptr)
@@ -526,7 +585,7 @@ RelianceGroupResult computeRelianceGroups(
             continue;
 
         if (visited[node] == 0)
-            fillOrder(graph, node, visited, nodeStack, activeNodes);
+            fillOrderNonRecursive(graph, node, visited, nodeStack, activeNodes);
     }
 
     std::fill(visited.begin(), visited.end(), 0);
@@ -540,7 +599,7 @@ RelianceGroupResult computeRelianceGroups(
   
         if (visited[currentNode] == 0)
         {
-            dfsUntil(graphTransposed, currentNode, visited, currentGroup, activeNodes);
+            dfsUntilNonRecursive(graphTransposed, currentNode, visited, currentGroup, activeNodes);
 
             if (currentGroup.size() > 0)
             {

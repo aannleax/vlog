@@ -235,7 +235,7 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
 
     const std::vector<Rule> &allOriginalRules = initialProgram.getAllRules();
     RelianceGroupResult positiveGroupsResult;
-
+    double timeRelianceMilliseconds = 0.0;
     if (splitPositive)
     {
         auto relianceStart = std::chrono::system_clock::now();
@@ -243,7 +243,7 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
         RelianceComputationResult positiveResult = computePositiveReliances(allOriginalRules, RelianceStrategy::Full, timeoutMilliSeconds);
         std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
 
-        double timeRelianceMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0;
+        timeRelianceMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0;
     
         if (positiveResult.timeout)
         {
@@ -252,7 +252,7 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
         }
         else
         {
-            std::cout << "RelianceTime: " << timeRelianceMilliseconds << " ms" << '\n';
+            std::cout << "Reliance-Time: " << timeRelianceMilliseconds << " ms" << '\n';
         }
 
         positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
@@ -295,9 +295,11 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
     
 
     double timeCycleMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - cycleStart).count() / 1000.0;
-   
+    double timeOverallMilliseconds = timeRelianceMilliseconds + timeCycleMilliseconds;
+
     std::cout << "Acyclic: " << ((result) ? "1" : "0") << '\n';
     std::cout << "Cycle-Time: " << timeCycleMilliseconds << " ms" << '\n';
+    std::cout << "Overall-Time: " << timeOverallMilliseconds << " ms" << '\n';
     std::cout << "Timeout: 0" << '\n';
 }
 

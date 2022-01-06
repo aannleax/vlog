@@ -100,6 +100,8 @@ struct CoreStratifiedResult
     unsigned numberOfRestrainedGroups = 0;
     unsigned biggestRestrainedGroupSize = 0;
     unsigned numberOfRulesInRestrainedGroups = 0;
+
+    std::vector<unsigned> smallestRestrainedComponent;
 };
 
 const size_t rulePairCacheSize = 40000;

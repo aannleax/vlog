@@ -349,6 +349,8 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "If set to true runs the acyclicity experiments", false);
     rel_options.add<bool>("", "splitPositive", true,
             "Determines if rules should be split into positive groups (true per default)", false);
+    rel_options.add<bool>("", "printCycles", false,
+            "Prints restraining-cycle.", false);
     
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
@@ -722,6 +724,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
     bool isCycle = vm["cycles"].as<bool>();
     bool splitPositive = vm["splitPositive"].as<bool>();
     std::string algorithm = vm["alg"].as<string>();
+    bool printCycles = vm["printCycles"].as<bool>();
 
     if (isTest)
     {
@@ -733,7 +736,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
     }
     else
     {
-        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy, (unsigned)timeout);
+        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy, (unsigned)timeout, printCycles);
     }
 }
 

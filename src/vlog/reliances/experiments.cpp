@@ -1,6 +1,138 @@
 #include <vlog/reliances/experiments.h>
 
-void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds)
+
+SimpleGraph createSubgraph(const SimpleGraph &originalGraph, std::vector<unsigned> component)
+{
+    SimpleGraph result(originalGraph.numberOfInitialNodes);
+
+    std::sort(component.begin(), component.end());
+
+    for (unsigned node : component)
+    {
+        for (unsigned successor : originalGraph.edges[node])
+        {
+            if (!std::binary_search(component.begin(), component.end(), successor))
+                continue;
+
+            result.addEdge(node, successor);
+        }
+    } 
+
+    return result;
+}
+
+size_t minIndex(const std::vector<size_t> &distances, const std::vector<unsigned> &considered)
+{
+    unsigned minIndex = 0; 
+    size_t minDistance = std::numeric_limits<size_t>::max();
+
+    for (unsigned index = 0; index < distances.size(); ++index)
+    {
+        if (distances[index] < minDistance && considered[index])
+        {
+            minDistance = distances[index];
+            minIndex = index;
+        }
+    }
+
+    return minIndex;
+}
+
+void printShortestCycle(const SimpleGraph &positiveGraph, const SimpleGraph &positiveGraphTransposed,
+    const SimpleGraph &restraintGraph, const SimpleGraph &restraintgraphTransposed,
+    const std::vector<unsigned> &component,
+    const std::vector<Rule> &rules, Program *program, EDBLayer *db)
+{
+    SimpleGraph positiveSubGraph = createSubgraph(positiveGraph, component);
+    SimpleGraph restraintSubGraph = createSubgraph(restraintGraph, component);
+
+    std::vector<unsigned> smallestCycle;
+
+    for (unsigned sourceNode : component)
+    {
+        if (restraintgraphTransposed.edges[sourceNode].size() == 0)
+            continue;
+
+        std::vector<size_t> distances;
+        std::vector<unsigned> predecessors;
+        std::vector<unsigned> considered;
+
+        distances.resize(positiveGraph.numberOfInitialNodes, std::numeric_limits<size_t>::max());
+        predecessors.resize(positiveGraph.numberOfInitialNodes, std::numeric_limits<unsigned>::max());
+        considered.resize(positiveGraph.numberOfInitialNodes, 0);
+    
+        distances[sourceNode] = 0;
+
+        for (size_t count = 0; count < component.size() - 1; ++count)
+        {
+            unsigned currentNode = minIndex(distances, considered);
+            if (distances[currentNode] == std::numeric_limits<size_t>::max())
+                break;
+
+            considered[currentNode] = 1;
+
+            for (unsigned adjacent : positiveSubGraph.edges[currentNode])
+            {
+                if (considered[adjacent] == 0 && distances[currentNode] + 1 < distances[adjacent])
+                {
+                    distances[adjacent] = distances[currentNode] + 1;
+                    predecessors[adjacent] = currentNode;
+                }
+            }
+
+            for (unsigned adjacent : restraintSubGraph.edges[currentNode])
+            {
+                if (considered[adjacent] == 0 && distances[currentNode] + 1 < distances[adjacent])
+                {
+                    distances[adjacent] = distances[currentNode] + 1;
+                    predecessors[adjacent] = currentNode;
+                }
+            }
+        }
+
+        unsigned minPred = 0;
+        unsigned minPredDistance = std::numeric_limits<unsigned>::max();
+        for (unsigned pred : restraintgraphTransposed.edges[sourceNode])
+        {
+            if (distances[pred] < minPredDistance)
+            {
+                minPredDistance = distances[pred];
+                minPred = pred;
+            }
+        }
+
+        std::vector<unsigned> currentCycle;
+        currentCycle.push_back(sourceNode);
+
+        if (minPred == sourceNode)
+        {
+            smallestCycle = currentCycle;
+            break;
+        }
+
+        unsigned currentPred = minPred;
+        bool isSmaller = true;
+        while (currentPred != sourceNode)
+        {
+            currentCycle.push_back(currentPred);
+            if (currentCycle.size() > smallestCycle.size())
+            {
+                isSmaller = false;
+                break;
+            }
+        }
+
+        if (isSmaller)
+            smallestCycle = currentCycle; 
+    }
+
+    for (unsigned cycleIndex = 0; cycleIndex < smallestCycle.size(); ++cycleIndex)
+    {
+        std::cout << (cycleIndex + 1) << " - " << rules[smallestCycle[cycleIndex]].tostring(program, db) << '\n';
+    }
+}
+
+void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds, bool printCycles)
 {
     std::cout << "Launched coreStratified experiment with parameters " << '\n';
     std::cout << "\t" << "Path: " << rulesPath << '\n';
@@ -69,6 +201,12 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
             std::cout << "BiggestRestrainedGroup-Abs: " << coreStratifiedResult.biggestRestrainedGroupSize << '\n';
             std::cout << "BiggestRestrainedGroup-Rel: " << (coreStratifiedResult.biggestRestrainedGroupSize / (float)allRules.size()) << '\n';
             std::cout << "RulesInRestrainedGroups-Rel: " << (coreStratifiedResult.numberOfRulesInRestrainedGroups / (float)allRules.size()) << '\n';
+        
+            if (printCycles)
+            {
+                printShortestCycle(positiveGraphs.first, positiveGraphs.second, restrainingGraphs.first, restrainingGraphs.second, 
+                    coreStratifiedResult.smallestRestrainedComponent, allRules, &program, &edbLayer);
+            }
         }
     }
 

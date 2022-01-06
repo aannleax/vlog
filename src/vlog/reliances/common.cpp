@@ -617,7 +617,10 @@ CoreStratifiedResult isCoreStratified(const SimpleGraph & unionGraph, const Simp
             }
 
             if (isGroupRestrained)
-                break;
+            {
+                if (result.smallestRestrainedComponent.size() > group.size())
+                    result.smallestRestrainedComponent = group;
+            }
         }
     }
 

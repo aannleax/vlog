@@ -28,7 +28,7 @@ size_t minIndex(const std::vector<size_t> &distances, const std::vector<unsigned
 
     for (unsigned index = 0; index < distances.size(); ++index)
     {
-        if (distances[index] < minDistance && considered[index])
+        if (distances[index] < minDistance && considered[index] == 0)
         {
             minDistance = distances[index];
             minIndex = index;
@@ -45,6 +45,8 @@ void printShortestCycle(const SimpleGraph &positiveGraph, const SimpleGraph &pos
 {
     SimpleGraph positiveSubGraph = createSubgraph(positiveGraph, component);
     SimpleGraph restraintSubGraph = createSubgraph(restraintGraph, component);
+
+    std::cout << "print cycles?" << component.size() << std::endl;
 
     std::vector<unsigned> smallestCycle;
 
@@ -115,11 +117,14 @@ void printShortestCycle(const SimpleGraph &positiveGraph, const SimpleGraph &pos
         while (currentPred != sourceNode)
         {
             currentCycle.push_back(currentPred);
-            if (currentCycle.size() > smallestCycle.size())
+           
+            if (smallestCycle.size() != 0 && currentCycle.size() > smallestCycle.size())
             {
                 isSmaller = false;
                 break;
             }
+
+            currentPred = predecessors[currentPred];
         }
 
         if (isSmaller)

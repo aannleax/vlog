@@ -85,6 +85,24 @@ void performTests(const std::string &ruleFolder, RelianceStrategy strat)
     cases.emplace_back(TestCase::Type::Restraint, "res_self_twice.dl", Edges{{0}});
     cases.emplace_back(TestCase::Type::Restraint, "res_self_Im.dl", Edges{{0}}); 
 
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_1.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_2.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_3.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_4.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_5.dl", Edges{{0}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_6.dl", Edges{{0}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_7.dl", Edges{{0}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_8.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_9.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_10.dl", Edges{{0}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_11.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_12.dl", Edges{{0}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_13.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_14.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_15.dl", Edges{{}});
+    cases.emplace_back(TestCase::Type::Restraint, "res_larry_16.dl", Edges{{}});
+
+
     size_t numberOfFailedTests = 0;
 
     for (const TestCase &test : cases)

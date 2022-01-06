@@ -10,3 +10,4 @@
 
 void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds, bool printCycles);
 void experimentCycles(const std::string &rulePath, const std::string &algorithm, bool splitPositive, unsigned timeoutMilliSeconds);
+void experimentGRD(const std::string &rulesPath, unsigned timeoutMilliSeconds);

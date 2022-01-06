@@ -351,6 +351,8 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Determines if rules should be split into positive groups (true per default)", false);
     rel_options.add<bool>("", "printCycles", false,
             "Prints restraining-cycle.", false);
+    rel_options.add<bool>("", "grd", false,
+            "Runs GRD experiment", false);
     
     vm.parse(argc, argv);
     return checkParams(vm, argc, argv);
@@ -725,6 +727,7 @@ void launchRelianceComputation(ProgramArgs &vm) {
     bool splitPositive = vm["splitPositive"].as<bool>();
     std::string algorithm = vm["alg"].as<string>();
     bool printCycles = vm["printCycles"].as<bool>();
+    bool isGRD = vm["grd"].as<bool>();
 
     if (isTest)
     {
@@ -733,6 +736,10 @@ void launchRelianceComputation(ProgramArgs &vm) {
     else if (isCycle)
     {
         experimentCycles(pathRules, algorithm, splitPositive, (unsigned)timeout);
+    }
+    else if (isGRD)
+    {
+        experimentGRD(pathRules, timeout);
     }
     else
     {

@@ -300,3 +300,54 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
     std::cout << "Cycle-Time: " << timeCycleMilliseconds << " ms" << '\n';
     std::cout << "Timeout: 0" << '\n';
 }
+
+void experimentGRD(const std::string &rulesPath, unsigned timeoutMilliSeconds)
+{
+    EDBConf emptyConf("", false);
+    EDBLayer edbLayer(emptyConf, false);
+
+    Program program(&edbLayer);
+    std::string errorString = program.readFromFile(rulesPath, false);
+    if (!errorString.empty()) {
+        LOG(ERRORL) << errorString;
+        return;
+    }
+
+    const std::vector<Rule> &allRules = program.getAllRules();
+
+    auto experimentStart = std::chrono::system_clock::now();
+    
+    RelianceComputationResult positiveResult = computePositiveReliances(allRules, RelianceStrategy::Full, timeoutMilliSeconds);
+    
+    if (positiveResult.timeout)
+    {
+        std::cout << "Timeout: 1" << '\n';
+        return;
+    }
+    
+    std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
+    RelianceGroupResult positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);  
+
+    bool isAcyclic = true;
+    for (const std::vector<unsigned> &group : positiveGroupsResult.groups)
+    {
+        if (group.size() > 1)
+        {
+            isAcyclic = false;
+            break;
+        }
+        else
+        {
+            if (positiveGraphs.first.containsEdge(group[0], group[0]))
+            {
+                isAcyclic = false;
+                break;
+            }
+        }
+    }   
+
+    double timeMilliSeconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - experimentStart).count() / 1000.0;   
+
+    std::cout << "Acyclic: " << (isAcyclic ? "1" : "0") << '\n';
+    std::cout << "Time: " << timeMilliSeconds << " ms" << '\n'; 
+}

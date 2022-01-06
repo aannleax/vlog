@@ -118,7 +118,7 @@ void printShortestCycle(const SimpleGraph &positiveGraph, const SimpleGraph &pos
         {
             currentCycle.push_back(currentPred);
            
-            if (smallestCycle.size() != 0 && currentCycle.size() > smallestCycle.size())
+            if (smallestCycle.size() > 2 && smallestCycle.size() != 0 && currentCycle.size() > smallestCycle.size())
             {
                 isSmaller = false;
                 break;

@@ -290,4 +290,5 @@ RelianceGroupResult computeRelianceGroups(const SimpleGraph &graph, const Simple
 CoreStratifiedResult isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph);
 std::string rulePairHash(RuleHashInfo ruleFromInfo, const RuleHashInfo &ruleToInfo, const Rule &ruleTo);
 RuleHashInfo ruleHashInfoFirst(const Rule &rule);
+bool possiblySatisfied(const std::vector<Literal> &right,  std::initializer_list<std::vector<Literal>> leftParts);
 #endif

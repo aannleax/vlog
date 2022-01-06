@@ -115,19 +115,23 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
-    satisfied.resize(ruleTo.getHeads().size(), 0);
-    prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
-
-    bool toHeadSatisfied =
-        relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
-            
-    if (!toHeadSatisfied && ruleTo.isExistential())
+    
+    if (possiblySatisfied(ruleTo.getHeads(), {ruleTo.getBody()}))
     {
-        toHeadSatisfied = checkConsistentExistential(existentialMappings);
-    }
+        satisfied.resize(ruleTo.getHeads().size(), 0);
+        prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
 
-    if (toHeadSatisfied)
-        return RelianceCheckResult::False;
+        bool toHeadSatisfied =
+            relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleTo.getHeads(), RelianceRuleRelation::To, assignments, satisfied, existentialMappings);
+            
+        if (!toHeadSatisfied && ruleTo.isExistential())
+        {
+            toHeadSatisfied = checkConsistentExistential(existentialMappings);
+        }
+
+        if (toHeadSatisfied)
+            return RelianceCheckResult::False;
+    }
 
     prepareExistentialMappings(ruleTo.getHeads(), RelianceRuleRelation::To, assignments, existentialMappings);
     satisfied.clear();
@@ -146,22 +150,25 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     if (alternativeMatchAlreadyPresent)
         return RelianceCheckResult::Extend;
 
-    prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
-    satisfied.clear();
-    satisfied.resize(ruleFrom.getHeads().size(), 0);
-
-    bool fromHeadSatisfied = relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
-    fromHeadSatisfied |= relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings, true);
-    fromHeadSatisfied |= relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
-    fromHeadSatisfied |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
-
-    if (!fromHeadSatisfied && ruleFrom.isExistential())
+    if (possiblySatisfied(ruleFrom.getHeads(), {ruleTo.getBody(), ruleTo.getHeads(), ruleFrom.getBody(), notMappedHeadLiterals}))
     {
-        fromHeadSatisfied = checkConsistentExistential(existentialMappings);
-    }
+        prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
+        satisfied.clear();
+        satisfied.resize(ruleFrom.getHeads().size(), 0);
 
-    if (fromHeadSatisfied)
-        return RelianceCheckResult::Extend;
+        bool fromHeadSatisfied = relianceModels(ruleTo.getBody(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+        fromHeadSatisfied |= relianceModels(ruleTo.getHeads(), RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings, true);
+        fromHeadSatisfied |= relianceModels(ruleFrom.getBody(), RelianceRuleRelation::From, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+        fromHeadSatisfied |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::To, ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+
+        if (!fromHeadSatisfied && ruleFrom.isExistential())
+        {
+            fromHeadSatisfied = checkConsistentExistential(existentialMappings);
+        }
+
+        if (fromHeadSatisfied)
+            return RelianceCheckResult::Extend;
+    }
 
     return RelianceCheckResult::True;
 }

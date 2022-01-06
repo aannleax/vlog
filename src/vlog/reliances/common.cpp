@@ -193,6 +193,33 @@ void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleR
     }
 }
 
+bool possiblySatisfied(const std::vector<Literal> &right, std::initializer_list<std::vector<Literal>> leftParts)
+{
+    for (const Literal &currentRight : right)
+    {
+        bool isPresent = false;
+        for (const std::vector<Literal> &left : leftParts)
+        {
+            for (const Literal &currentLeft : left)
+            {
+                if (currentLeft.getPredicate().getId() == currentRight.getPredicate().getId())
+                {
+                    isPresent = true;
+                    break;
+                }
+            }
+
+            if (isPresent)
+                break;
+        }
+
+        if(!isPresent)
+            return false;
+    }
+
+    return true;
+}
+
 bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftRelation,
     const std::vector<Literal> &right, RelianceRuleRelation rightRelation,
     const VariableAssignments &assignments,

@@ -102,7 +102,6 @@ void performTests(const std::string &ruleFolder, RelianceStrategy strat)
     cases.emplace_back(TestCase::Type::Restraint, "res_larry_15.dl", Edges{{}});
     cases.emplace_back(TestCase::Type::Restraint, "res_larry_16.dl", Edges{{}});
 
-
     size_t numberOfFailedTests = 0;
 
     for (const TestCase &test : cases)

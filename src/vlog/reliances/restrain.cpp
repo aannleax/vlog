@@ -32,7 +32,7 @@ bool restrainIsTimeout(bool rare)
 
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo, 
-    const VariableAssignments &assignments,
+    VariableAssignments &assignments,
     RelianceStrategy strat);
 
 bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals, 
@@ -85,7 +85,7 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
-    const std::vector<Literal> toHeadLiterals = ruleTo.getHeads();
+    const std::vector<Literal> &toHeadLiterals = ruleTo.getHeads();
     std::vector<Literal> notMappedHeadLiterals;
     notMappedHeadLiterals.reserve(ruleTo.getHeads().size());
     for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
@@ -206,7 +206,7 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
 
 bool restrainExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments, RelianceStrategy strat)
+    VariableAssignments &assignments, RelianceStrategy strat)
 {
     if (restrainIsTimeout(true))
         return true;
@@ -225,9 +225,14 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
             if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId())
                 continue;
 
-            VariableAssignments extendedAssignments = assignments;
+            assignments.increaseDepth();
+            VariableAssignments &extendedAssignments = assignments;
+
             if (!restrainExtendAssignment(literalFrom, literalTo, extendedAssignments, strat))
+            {
+                assignments.decreaseDepth();
                 continue;
+            }
 
             switch (restrainCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
             {
@@ -249,6 +254,8 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
                     return true;
                 } break;
             }
+
+            assignments.decreaseDepth();
         }
 
         mappingDomain.pop_back();
@@ -498,7 +505,7 @@ bool selfRestrainExtendAssignment(const Literal &literalFrom, const Literal &lit
 }
 
 bool selfRestrainExtend(std::vector<unsigned> &mappingDomain, const Rule &rule,
-    const VariableAssignments &assignments, RelianceStrategy strat)
+    VariableAssignments &assignments, RelianceStrategy strat)
 {
     if (restrainIsTimeout(true))
         return true;
@@ -517,9 +524,14 @@ bool selfRestrainExtend(std::vector<unsigned> &mappingDomain, const Rule &rule,
             if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId())
                 continue;
 
-            VariableAssignments extendedAssignments = assignments;
+            assignments.increaseDepth();
+            VariableAssignments &extendedAssignments = assignments;
+            
             if (!selfRestrainExtendAssignment(literalFrom, literalTo, extendedAssignments))
+            {
+                assignments.decreaseDepth();
                 continue;
+            }
 
             switch (selfRestrainCheck(mappingDomain, rule, extendedAssignments))
             {
@@ -541,6 +553,8 @@ bool selfRestrainExtend(std::vector<unsigned> &mappingDomain, const Rule &rule,
                     return true;
                 } break;
             }
+
+            assignments.decreaseDepth();
         }
 
         mappingDomain.pop_back();

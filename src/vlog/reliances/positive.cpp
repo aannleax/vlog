@@ -78,7 +78,7 @@ bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments,
+    VariableAssignments &assignments,
     RelianceStrategy strat);
 
 RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain, 
@@ -86,7 +86,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
     const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
-    const std::vector<Literal> toBodyLiterals = ruleTo.getBody();
+    const std::vector<Literal> &toBodyLiterals = ruleTo.getBody();
     std::vector<Literal> notMappedToBodyLiterals;
     notMappedToBodyLiterals.reserve(toBodyLiterals.size());
     for (unsigned bodyIndex = 0; bodyIndex < toBodyLiterals.size(); ++bodyIndex)
@@ -180,7 +180,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
-    const VariableAssignments &assignments,
+    VariableAssignments &assignments,
     RelianceStrategy strat)
 {
     if (positiveIsTimeout(true))
@@ -200,9 +200,14 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
             if (literalTo.getPredicate().getId() != literalFrom.getPredicate().getId())
                 continue;
 
-            VariableAssignments extendedAssignments = assignments;
+            assignments.increaseDepth();
+            VariableAssignments &extendedAssignments = assignments;
+            
             if (!positiveExtendAssignment(literalFrom, literalTo, extendedAssignments, strat))
+            {
+                assignments.decreaseDepth();
                 continue;
+            }
 
             switch (positiveCheck(mappingDomain, ruleFrom, ruleTo, extendedAssignments))
             {
@@ -224,6 +229,8 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
                     return true;
                 } break;
             }
+
+            assignments.decreaseDepth();
         }
 
         mappingDomain.pop_back();

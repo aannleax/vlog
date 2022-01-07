@@ -123,6 +123,10 @@ struct VariableAssignments
         constantAssignment.resize(variableCount, NOT_ASSIGNED);
         groupAssignments.resize(variableCount, NOT_ASSIGNED);
 
+        recoverConstantAssignment.resize(variableCount, 0);
+        recoverGroupAssignment.resize(variableCount, 0);
+        recoverGroupGraph.resize(groupGraph.numberOfInitialNodes);
+
         variableToOffset = variableCountFrom;
     }
 
@@ -205,6 +209,43 @@ struct VariableAssignments
         }
     }
 
+    void increaseDepth()
+    {
+        ++currentRecoverDepth;
+
+        for (unsigned node = 0; node < groupGraph.numberOfInitialNodes; ++node)
+        {
+            recoverGroupGraph[node].push_back(groupGraph.edges[node].size());
+        }
+    }
+
+    void decreaseDepth()
+    {
+        for (size_t recoverIndex = 0; recoverIndex < recoverConstantAssignment.size(); ++recoverIndex)
+        {
+            if (currentRecoverDepth == recoverConstantAssignment[recoverIndex])
+            {
+                constantAssignment[recoverIndex] = NOT_ASSIGNED;
+            }
+        }
+
+        for (size_t recoverIndex = 0; recoverIndex < recoverGroupAssignment.size(); ++recoverIndex)
+        {
+            if (currentRecoverDepth == recoverGroupAssignment[recoverIndex])
+            {
+                groupAssignments[recoverIndex] = NOT_ASSIGNED;
+            }
+        }
+
+        for (unsigned node = 0; node < groupGraph.numberOfInitialNodes; ++node)
+        {
+            groupGraph.edges[node].resize(recoverGroupGraph[node].back());
+            recoverGroupGraph[node].pop_back();
+        }
+        
+        --currentRecoverDepth;
+    }
+
     bool hasMappedExistentialVariable = false;
 private:
     size_t variableToOffset;
@@ -215,9 +256,15 @@ private:
     std::vector<int64_t> constantAssignment;
     std::vector<int64_t> groupAssignments;
 
+    unsigned currentRecoverDepth = 0;
+    std::vector<unsigned> recoverConstantAssignment;
+    std::vector<unsigned> recoverGroupAssignment;
+    std::vector<std::vector<size_t>> recoverGroupGraph;
+
     void assignConstantsNext(int32_t trueId, int64_t constant)
     {
         constantAssignment[trueId] = constant;
+        recoverConstantAssignment[trueId] = currentRecoverDepth;
 
         for (size_t successor : groupGraph.edges[trueId])
         {
@@ -231,6 +278,7 @@ private:
     void finishGroupAssignmentsNext(int32_t trueId, int64_t groupId)
     {
         groupAssignments[trueId] = groupId;
+        recoverGroupAssignment[trueId] = currentRecoverDepth;
 
         for (size_t successor : groupGraph.edges[trueId])
         {

@@ -405,7 +405,7 @@ void SemiNaiver::run(size_t lastExecution, size_t it, unsigned long *timeout,
         executeRules(allEDBRules, emptyRuleset, allIDBRules, emptyExtIDBRules, costRules, timeout);
     }
 
-    std::cout << "Iterations: " << this->iteration << std::endl;
+    // std::cout << "Iterations: " << this->iteration << std::endl;
 
     running = false;
     LOG(DEBUGL) << "Finished process. Iterations=" << iteration;

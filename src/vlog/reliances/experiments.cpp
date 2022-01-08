@@ -350,6 +350,13 @@ void experimentGRD(const std::string &rulesPath, unsigned timeoutMilliSeconds)
 
     double timeMilliSeconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - experimentStart).count() / 1000.0;   
 
+    size_t totalNumberOfEdges = 0;
+    for (const auto &successors : positiveGraphs.first.edges)
+    {
+        totalNumberOfEdges += successors.size();
+    }
+
     std::cout << "Acyclic: " << (isAcyclic ? "1" : "0") << '\n';
+    std::cout << "NumberOfEdges: " << totalNumberOfEdges << '\n';
     std::cout << "Time: " << timeMilliSeconds << " ms" << '\n'; 
 }

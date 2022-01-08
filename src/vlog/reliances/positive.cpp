@@ -56,7 +56,8 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
     return true;
 }
 
-bool positiveCheckNullsInToBody(const std::vector<Literal> &literals,
+template<typename T>
+bool positiveCheckNullsInToBody(const std::vector<T> &literals,
     const VariableAssignments &assignments, RelianceRuleRelation relation)
 {
     for (const Literal &literal : literals)
@@ -87,7 +88,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> &toBodyLiterals = ruleTo.getBody();
-    std::vector<Literal> notMappedToBodyLiterals;
+    std::vector<std::reference_wrapper<const Literal>> notMappedToBodyLiterals;
     notMappedToBodyLiterals.reserve(toBodyLiterals.size());
     for (unsigned bodyIndex = 0; bodyIndex < toBodyLiterals.size(); ++bodyIndex)
     {
@@ -117,7 +118,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
     
-    if (possiblySatisfied(ruleFrom.getHeads(), {ruleFrom.getBody(), notMappedToBodyLiterals}))
+    if (possiblySatisfied(ruleFrom.getHeads(), {ruleFrom.getBody()}, notMappedToBodyLiterals))
     {
         satisfied.resize(ruleFrom.getHeads().size(), 0);
         prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
@@ -136,7 +137,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
         }
     }
 
-    if (possiblySatisfied(ruleTo.getBody(), {ruleFrom.getBody(), notMappedToBodyLiterals}))
+    if (possiblySatisfied(ruleTo.getBody(), {ruleFrom.getBody()}, notMappedToBodyLiterals))
     {
         satisfied.clear();
         satisfied.resize(ruleTo.getBody().size(), 0);
@@ -156,7 +157,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
         }
     }
 
-    if (possiblySatisfied(ruleTo.getHeads(), {ruleFrom.getBody(), notMappedToBodyLiterals, ruleFrom.getHeads()}))
+    if (possiblySatisfied(ruleTo.getHeads(), {ruleFrom.getBody(), ruleFrom.getHeads()}, notMappedToBodyLiterals))
     {
         satisfied.clear();
         satisfied.resize(ruleTo.getHeads().size(), 0);

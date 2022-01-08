@@ -35,7 +35,7 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     VariableAssignments &assignments,
     RelianceStrategy strat);
 
-bool checkUnmappedExistentialVariables(const std::vector<Literal> &literals, 
+bool checkUnmappedExistentialVariables(const std::vector<std::reference_wrapper<const Literal>> &literals, 
     const VariableAssignments &assignments, RelianceRuleRelation relation = RelianceRuleRelation::To)
 {
     for (const Literal &literal : literals)
@@ -86,7 +86,7 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> &toHeadLiterals = ruleTo.getHeads();
-    std::vector<Literal> notMappedHeadLiterals;
+    std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
     notMappedHeadLiterals.reserve(ruleTo.getHeads().size());
     for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
     {
@@ -150,7 +150,7 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     if (alternativeMatchAlreadyPresent)
         return RelianceCheckResult::Extend;
 
-    if (possiblySatisfied(ruleFrom.getHeads(), {ruleTo.getBody(), ruleTo.getHeads(), ruleFrom.getBody(), notMappedHeadLiterals}))
+    if (possiblySatisfied(ruleFrom.getHeads(), {ruleTo.getBody(), ruleTo.getHeads(), ruleFrom.getBody()}, notMappedHeadLiterals))
     {
         prepareExistentialMappings(ruleFrom.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
         satisfied.clear();
@@ -382,7 +382,7 @@ RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain,
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toHeadLiterals = rule.getHeads();
-    std::vector<Literal> notMappedHeadLiterals;
+    std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
     notMappedHeadLiterals.reserve(rule.getHeads().size());
     for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
     {
@@ -410,19 +410,23 @@ RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain,
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
-    satisfied.resize(rule.getHeads().size(), 0);
-    prepareExistentialMappings(rule.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
 
-    bool ruleSatisfied= relianceModels(rule.getBody(), RelianceRuleRelation::From, rule.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
-    ruleSatisfied |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::From, rule.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
-   
-    if (!ruleSatisfied && rule.isExistential())
+    if (possiblySatisfied(rule.getHeads(), {rule.getBody()}, notMappedHeadLiterals))
     {
-        ruleSatisfied = checkConsistentExistential(existentialMappings);
-    }
+        satisfied.resize(rule.getHeads().size(), 0);
+        prepareExistentialMappings(rule.getHeads(), RelianceRuleRelation::From, assignments, existentialMappings);
 
-    if (ruleSatisfied)
-        return RelianceCheckResult::Extend;
+        bool ruleSatisfied= relianceModels(rule.getBody(), RelianceRuleRelation::From, rule.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+        ruleSatisfied |= relianceModels(notMappedHeadLiterals, RelianceRuleRelation::From, rule.getHeads(), RelianceRuleRelation::From, assignments, satisfied, existentialMappings);
+    
+        if (!ruleSatisfied && rule.isExistential())
+        {
+            ruleSatisfied = checkConsistentExistential(existentialMappings);
+        }
+
+        if (ruleSatisfied)
+            return RelianceCheckResult::Extend;
+    }
 
     return RelianceCheckResult::True;
 }

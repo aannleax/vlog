@@ -123,8 +123,8 @@ struct VariableAssignments
         constantAssignment.resize(variableCount, NOT_ASSIGNED);
         groupAssignments.resize(variableCount, NOT_ASSIGNED);
 
-        recoverConstantAssignment.resize(variableCount, 0);
-        recoverGroupAssignment.resize(variableCount, 0);
+        // recoverConstantAssignment.resize(variableCount, 0);
+        // recoverGroupAssignment.resize(variableCount, 0);
         recoverGroupGraph.resize(groupGraph.numberOfInitialNodes);
 
         variableToOffset = variableCountFrom;
@@ -213,29 +213,49 @@ struct VariableAssignments
     {
         ++currentRecoverDepth;
 
+        recoverConstantAssignment.push(-1);
+        recoverGroupAssignment.push(-1);
+
         for (unsigned node = 0; node < groupGraph.numberOfInitialNodes; ++node)
         {
             recoverGroupGraph[node].push_back(groupGraph.edges[node].size());
         }
     }
 
+    void recoverFromStack(std::stack<int> &stack, std::vector<int64_t> &assignment)
+    {
+        while (true)
+        {
+            int currentElement = stack.top();
+            stack.pop();
+
+            if (currentElement < 0)
+                break;
+
+            assignment[currentElement] = NOT_ASSIGNED;
+        }
+    }
+
     void decreaseDepth()
     {
-        for (size_t recoverIndex = 0; recoverIndex < recoverConstantAssignment.size(); ++recoverIndex)
-        {
-            if (currentRecoverDepth == recoverConstantAssignment[recoverIndex])
-            {
-                constantAssignment[recoverIndex] = NOT_ASSIGNED;
-            }
-        }
+        recoverFromStack(recoverConstantAssignment, constantAssignment);
+        recoverFromStack(recoverGroupAssignment, groupAssignments);
 
-        for (size_t recoverIndex = 0; recoverIndex < recoverGroupAssignment.size(); ++recoverIndex)
-        {
-            if (currentRecoverDepth == recoverGroupAssignment[recoverIndex])
-            {
-                groupAssignments[recoverIndex] = NOT_ASSIGNED;
-            }
-        }
+        // for (size_t recoverIndex = 0; recoverIndex < recoverConstantAssignment.size(); ++recoverIndex)
+        // {
+        //     if (currentRecoverDepth == recoverConstantAssignment[recoverIndex])
+        //     {
+        //         constantAssignment[recoverIndex] = NOT_ASSIGNED;
+        //     }
+        // }
+
+        // for (size_t recoverIndex = 0; recoverIndex < recoverGroupAssignment.size(); ++recoverIndex)
+        // {
+        //     if (currentRecoverDepth == recoverGroupAssignment[recoverIndex])
+        //     {
+        //         groupAssignments[recoverIndex] = NOT_ASSIGNED;
+        //     }
+        // }
 
         for (unsigned node = 0; node < groupGraph.numberOfInitialNodes; ++node)
         {
@@ -247,9 +267,6 @@ struct VariableAssignments
     }
 
     bool hasMappedExistentialVariable = false;
-private:
-    size_t variableToOffset;
-    int64_t currentGroupId = 0;
 
     SimpleGraph groupGraph;
 
@@ -257,14 +274,20 @@ private:
     std::vector<int64_t> groupAssignments;
 
     unsigned currentRecoverDepth = 0;
-    std::vector<unsigned> recoverConstantAssignment;
-    std::vector<unsigned> recoverGroupAssignment;
+    std::stack<int> recoverConstantAssignment;
+    std::stack<int> recoverGroupAssignment;
     std::vector<std::vector<size_t>> recoverGroupGraph;
+private:
+    size_t variableToOffset;
+    int64_t currentGroupId = 0;
+
+    
 
     void assignConstantsNext(int32_t trueId, int64_t constant)
     {
         constantAssignment[trueId] = constant;
-        recoverConstantAssignment[trueId] = currentRecoverDepth;
+        // recoverConstantAssignment[trueId] = currentRecoverDepth;
+        recoverConstantAssignment.push(trueId);
 
         for (size_t successor : groupGraph.edges[trueId])
         {
@@ -278,7 +301,8 @@ private:
     void finishGroupAssignmentsNext(int32_t trueId, int64_t groupId)
     {
         groupAssignments[trueId] = groupId;
-        recoverGroupAssignment[trueId] = currentRecoverDepth;
+        // recoverGroupAssignment[trueId] = currentRecoverDepth;
+        recoverGroupAssignment.push(trueId);
 
         for (size_t successor : groupGraph.edges[trueId])
         {
@@ -323,7 +347,9 @@ TermInfo getTermInfoUnify(VTerm term, const VariableAssignments &assignments, Re
 bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight);
 unsigned highestLiteralsId(const std::vector<Literal> &literalVector);
 bool checkConsistentExistential(const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings);
-bool relianceModels(const std::vector<Literal> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings, bool alwaysDefaultAssignExistentials = false, bool treatExistentialAsVariables = true);
+template<typename T>
+bool relianceModels(const std::vector<T> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings, bool alwaysDefaultAssignExistentials = false, bool treatExistentialAsVariables = true);
+// bool relianceModels(const std::vector<std::reference_wrapper<Literal>> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings, bool alwaysDefaultAssignExistentials = false, bool treatExistentialAsVariables = true);
 bool unifyTerms(const TermInfo &fromInfo, const TermInfo &toInfo, VariableAssignments &assignments);
 Rule markExistentialVariables(const Rule &rule);
 void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings);
@@ -338,5 +364,6 @@ RelianceGroupResult computeRelianceGroups(const SimpleGraph &graph, const Simple
 CoreStratifiedResult isCoreStratified(const SimpleGraph & unionGraph, const SimpleGraph & unionGraphTransposed, const SimpleGraph &restrainingGraph);
 std::string rulePairHash(RuleHashInfo ruleFromInfo, const RuleHashInfo &ruleToInfo, const Rule &ruleTo);
 RuleHashInfo ruleHashInfoFirst(const Rule &rule);
-bool possiblySatisfied(const std::vector<Literal> &right,  std::initializer_list<std::vector<Literal>> leftParts);
+bool possiblySatisfied(const std::vector<Literal> &right, std::initializer_list<std::vector<Literal>> leftParts, const std::vector<std::reference_wrapper<const Literal>> &leftRef);
+bool possiblySatisfied(const std::vector<Literal> &right, std::initializer_list<std::vector<Literal>> leftParts);
 #endif

@@ -236,12 +236,15 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
     const std::vector<Rule> &allOriginalRules = initialProgram.getAllRules();
     RelianceGroupResult positiveGroupsResult;
     double timeRelianceMilliseconds = 0.0;
+
+    RelianceComputationResult positiveResult;
+
     if (splitPositive)
     {
         auto relianceStart = std::chrono::system_clock::now();
 
-        RelianceComputationResult positiveResult = computePositiveReliances(allOriginalRules, RelianceStrategy::Full, timeoutMilliSeconds);
-        std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
+        positiveResult = computePositiveReliances(allOriginalRules, RelianceStrategy::Full, timeoutMilliSeconds);
+        std::pair<SimpleGraph, SimpleGraph> &positiveGraphs = positiveResult.graphs;
 
         timeRelianceMilliseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - relianceStart).count() / 1000.0;
     
@@ -265,6 +268,9 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
     {
         for (const std::vector<unsigned> &group : positiveGroupsResult.groups)
         {
+            if (group.size() == 1 && !positiveResult.graphs.first.containsEdge(group[0], group[0]))
+                continue;
+
             Program currentProgram(&edbLayer);
             bool containsExisitential = false;
             for (unsigned ruleIndex : group)

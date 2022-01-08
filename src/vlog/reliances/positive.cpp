@@ -1,4 +1,5 @@
 #include "vlog/reliances/reliances.h"
+#include "vlog/reliances/models.h"
 
 #include <vector>
 #include <utility>

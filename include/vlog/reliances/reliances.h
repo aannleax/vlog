@@ -10,6 +10,10 @@
 #include <algorithm>
 #include <numeric>
 #include <stack>
+#include <utility>
+#include <list>
+#include <unordered_map>
+#include <unordered_set>
 
 #define NOT_ASSIGNED std::numeric_limits<int64_t>::max()
 #define ASSIGNED (NOT_ASSIGNED - 1)
@@ -267,6 +271,9 @@ struct VariableAssignments
     }
 
     bool hasMappedExistentialVariable = false;
+private:
+    size_t variableToOffset;
+    int64_t currentGroupId = 0;
 
     SimpleGraph groupGraph;
 
@@ -277,11 +284,6 @@ struct VariableAssignments
     std::stack<int> recoverConstantAssignment;
     std::stack<int> recoverGroupAssignment;
     std::vector<std::vector<size_t>> recoverGroupGraph;
-private:
-    size_t variableToOffset;
-    int64_t currentGroupId = 0;
-
-    
 
     void assignConstantsNext(int32_t trueId, int64_t constant)
     {
@@ -344,16 +346,15 @@ struct RelianceGroupResult
 
 // Common
 TermInfo getTermInfoUnify(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation);
+TermInfo getTermInfoModels(VTerm term, const VariableAssignments &assignments, RelianceRuleRelation relation, bool alwaysDefaultAssignExistentials);
 bool termsEqual(const TermInfo &termLeft, const TermInfo &termRight);
 unsigned highestLiteralsId(const std::vector<Literal> &literalVector);
 bool checkConsistentExistential(const std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &mappings);
-template<typename T>
-bool relianceModels(const std::vector<T> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings, bool alwaysDefaultAssignExistentials = false, bool treatExistentialAsVariables = true);
+// template<typename T> bool relianceModels(const std::vector<T> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings, bool alwaysDefaultAssignExistentials = false, bool treatExistentialAsVariables = true);
 // bool relianceModels(const std::vector<std::reference_wrapper<Literal>> &left, RelianceRuleRelation leftRelation, const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<unsigned> &satisfied, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings, bool alwaysDefaultAssignExistentials = false, bool treatExistentialAsVariables = true);
 bool unifyTerms(const TermInfo &fromInfo, const TermInfo &toInfo, VariableAssignments &assignments);
 Rule markExistentialVariables(const Rule &rule);
 void prepareExistentialMappings(const std::vector<Literal> &right, RelianceRuleRelation rightRelation, const VariableAssignments &assignments, std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> &existentialMappings);
-
 // For outside
 RelianceComputationResult computePositiveReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full, unsigned timeoutMilliSeconds = 0.0);
 RelianceComputationResult computeRestrainReliances(const std::vector<Rule> &rules, RelianceStrategy strat = RelianceStrategy::Full, unsigned timeoutMilliSeconds = 0.0);

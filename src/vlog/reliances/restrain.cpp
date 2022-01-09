@@ -194,7 +194,10 @@ bool restrainExtendAssignment(const Literal &literalFrom, const Literal &literal
             return false;
 
         if (!unifyTerms(fromInfo, toInfo, assignments))
+        {
+            assignments.finishGroupAssignments();
             return false;
+        }
 
         if (toInfo.type == TermInfo::Types::Existential)
             assignments.hasMappedExistentialVariable = true;
@@ -501,10 +504,11 @@ bool selfRestrainExtendAssignment(const Literal &literalFrom, const Literal &lit
         TermInfo toInfo = selfRestrainGetTermInfoUnify(toTerm, assignments, RelianceRuleRelation::To);
 
         if (!selfRestrainUnifyTerms(fromInfo, toInfo, assignments))
+        {
+            assignments.finishGroupAssignments();
             return false;
+        }    
     }
-
-    assignments.finishGroupAssignments();
 
     return true;
 }

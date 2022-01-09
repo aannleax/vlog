@@ -584,34 +584,38 @@ CoreStratifiedResult isCoreStratified(const SimpleGraph & unionGraph, const Simp
     
     for (auto &group : staticRestrainedGroups.groups)
     {
+        bool isGroupRestrained = false;
+
         for (unsigned ruleIndex : group)
         {
-            bool isGroupRestrained = false;
-
             for (unsigned restrainedRule : restrainingGraph.edges[ruleIndex])
             {
                 if (std::find(group.begin(), group.end(), restrainedRule) != group.end())
                 {
                     isGroupRestrained = true;
 
-                    result.stratified = false;
-                    result.numberOfRulesInRestrainedGroups += (unsigned)group.size();
-                    ++result.numberOfRestrainedGroups;
-
-                    if (group.size() > result.biggestRestrainedGroupSize)
-                    {
-                        result.biggestRestrainedGroupSize = (unsigned)group.size();
-                    }
-
                     break;
-                }
+                }    
             }
 
             if (isGroupRestrained)
+                break;
+        }
+
+        if (isGroupRestrained)
+        {
+            result.stratified = false;
+            
+            if (group.size() > result.biggestRestrainedGroupSize)
             {
-                if (result.smallestRestrainedComponent.size() == 0 || result.smallestRestrainedComponent.size() > group.size())
-                    result.smallestRestrainedComponent = group;
+                result.biggestRestrainedGroupSize = (unsigned)group.size();
             }
+
+            ++result.numberOfRestrainedGroups;
+            result.numberOfRulesInRestrainedGroups += (unsigned)group.size();
+
+            if (result.smallestRestrainedComponent.size() == 0 || result.smallestRestrainedComponent.size() > group.size())
+                result.smallestRestrainedComponent = group;
         }
     }
 

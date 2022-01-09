@@ -510,6 +510,8 @@ bool selfRestrainExtendAssignment(const Literal &literalFrom, const Literal &lit
         }    
     }
 
+    assignments.finishGroupAssignments();
+
     return true;
 }
 

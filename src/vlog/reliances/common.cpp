@@ -423,29 +423,37 @@ void fillOrder(const SimpleGraph &graph, unsigned node,
 void fillOrderNonRecursive(const SimpleGraph &graph, unsigned node, 
     std::vector<unsigned> &visited, std::stack<unsigned> &stack, std::vector<bool> *activeNodes = nullptr)
 {
-    std::stack<unsigned> dfsStack;
-    dfsStack.push(node);
+    std::stack<std::pair<unsigned, bool>> dfsStack;
+    dfsStack.push(std::make_pair(node, false));
 
     while (!dfsStack.empty())
     {
-        unsigned currentNode = dfsStack.top();
+        unsigned currentNode = dfsStack.top().first;
+        bool currentNodePost = dfsStack.top().second;
         dfsStack.pop();
 
-        if (visited[currentNode] == 1)
-            continue;
-
-        visited[currentNode] = 1;
-
-        for(unsigned adjacentNode : graph.edges[currentNode])
+        if (currentNodePost)
         {
-            if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
+            stack.push(currentNode);
+        }
+        else
+        {
+            if (visited[currentNode] == 1)
                 continue;
 
-            if (visited[adjacentNode] == 0)
-                dfsStack.push(adjacentNode);
-        }
+            visited[currentNode] = 1;
 
-        stack.push(currentNode);
+            dfsStack.push(std::make_pair(currentNode, true));
+
+            for(unsigned adjacentNode : graph.edges[currentNode])
+            {
+                if (activeNodes != nullptr && !(*activeNodes)[adjacentNode])
+                    continue;
+
+                if (visited[adjacentNode] == 0)
+                    dfsStack.push(std::make_pair(adjacentNode, false));
+            }
+        }        
     }
 }
 

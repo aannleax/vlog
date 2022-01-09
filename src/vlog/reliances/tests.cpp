@@ -115,4 +115,16 @@ void performTests(const std::string &ruleFolder, RelianceStrategy strat)
     }
 
     std::cout << (cases.size() - numberOfFailedTests) << "/" << cases.size() << " passed." << std::endl;
+
+    SimpleGraph testGraph(5), testGraphTransposed(5);
+    testGraph.addEdge(0, 2); testGraphTransposed.addEdge(2, 0);
+    testGraph.addEdge(2, 1); testGraphTransposed.addEdge(1, 2);
+    testGraph.addEdge(1, 0); testGraphTransposed.addEdge(0, 1);
+    testGraph.addEdge(0, 3); testGraphTransposed.addEdge(3, 0);
+    testGraph.addEdge(3, 4); testGraphTransposed.addEdge(4, 3);
+
+    std::vector<std::vector<unsigned>> expected = {{2, 0, 1}, {3}, {4}};
+
+    RelianceGroupResult groupResult = computeRelianceGroups(testGraph, testGraphTransposed);
+    std::cout << "Reliance group test passed: " << ((groupResult.groups == expected) ? "yes" : "no") << std::endl;
 }

@@ -49,10 +49,7 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
             return false;
 
         if (!unifyTerms(fromInfo, toInfo, assignments))
-        {
-            assignments.finishGroupAssignments();
             return false;
-        }
     }
 
     assignments.finishGroupAssignments();

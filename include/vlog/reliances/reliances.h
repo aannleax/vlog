@@ -160,6 +160,12 @@ struct VariableAssignments
         groupGraph.addEdge(variableIdFrom, variableIdTo);
         groupGraph.addEdge(variableIdTo, variableIdFrom);
 
+        if (groupAssignments[variableIdFrom] == NOT_ASSIGNED)
+            recoverGroupAssignment.push(variableIdFrom);
+    
+        if (groupAssignments[variableIdTo] == NOT_ASSIGNED)
+            recoverGroupAssignment.push(variableIdTo);
+
         groupAssignments[variableIdFrom] = ASSIGNED;
         groupAssignments[variableIdTo] = ASSIGNED;
 
@@ -180,6 +186,12 @@ struct VariableAssignments
 
         groupGraph.addEdge(variableIdFrom, variableIdTo);
         groupGraph.addEdge(variableIdTo, variableIdFrom);
+        
+        if (groupAssignments[variableIdFrom] == NOT_ASSIGNED)
+            recoverGroupAssignment.push(variableIdFrom);
+    
+        if (groupAssignments[variableIdTo] == NOT_ASSIGNED)
+            recoverGroupAssignment.push(variableIdTo);
 
         groupAssignments[variableIdFrom] = ASSIGNED;
         groupAssignments[variableIdTo] = ASSIGNED;
@@ -287,10 +299,12 @@ private:
 
     void assignConstantsNext(int32_t trueId, int64_t constant)
     {
+        if (constantAssignment[trueId] == NOT_ASSIGNED)
+            recoverConstantAssignment.push(trueId);
+
         constantAssignment[trueId] = constant;
         // recoverConstantAssignment[trueId] = currentRecoverDepth;
-        recoverConstantAssignment.push(trueId);
-
+    
         for (size_t successor : groupGraph.edges[trueId])
         {
             if (constantAssignment[successor] == NOT_ASSIGNED)
@@ -304,7 +318,6 @@ private:
     {
         groupAssignments[trueId] = groupId;
         // recoverGroupAssignment[trueId] = currentRecoverDepth;
-        recoverGroupAssignment.push(trueId);
 
         for (size_t successor : groupGraph.edges[trueId])
         {

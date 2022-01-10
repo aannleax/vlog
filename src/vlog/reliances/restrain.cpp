@@ -83,14 +83,19 @@ bool restrainCheckNullsInBody(const std::vector<Literal> &literals,
     return true;   
 }
 
+std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
+std::vector<unsigned> notMappedHeadIndexes;
+
 RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> &toHeadLiterals = ruleTo.getHeads();
-    std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
-    std::vector<unsigned> notMappedHeadIndexes;
+
+    notMappedHeadLiterals.clear();
+    notMappedHeadIndexes.clear();
+
     notMappedHeadLiterals.reserve(ruleTo.getHeads().size());
     notMappedHeadIndexes.reserve(ruleTo.getHeads().size());
 
@@ -401,8 +406,10 @@ RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain,
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toHeadLiterals = rule.getHeads();
-    std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
-    std::vector<unsigned> notMappedHeadIndexes;
+
+    notMappedHeadLiterals.clear();
+    notMappedHeadIndexes.clear();
+
     notMappedHeadLiterals.reserve(rule.getHeads().size());
     notMappedHeadIndexes.reserve(rule.getHeads().size());
     for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)

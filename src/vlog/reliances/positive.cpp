@@ -139,7 +139,6 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
     
-    /*
     if (possiblySatisfied(ruleFrom.getHeads(), {ruleFrom.getBody()}, notMappedToBodyLiterals))
     {
         satisfied.resize(ruleFrom.getHeads().size(), 0);
@@ -196,7 +195,7 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
 
         if (toRuleSatisfied)
             return RelianceCheckResult::False;
-    }*/
+    }
 
     return RelianceCheckResult::True;
 }

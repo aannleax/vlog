@@ -36,11 +36,13 @@ bool restrainExtend(std::vector<unsigned> &mappingDomain,
     VariableAssignments &assignments,
     RelianceStrategy strat);
 
-bool checkUnmappedExistentialVariables(const std::vector<std::reference_wrapper<const Literal>> &literals, 
+int checkUnmappedExistentialVariables(const std::vector<std::reference_wrapper<const Literal>> &literals, 
     const VariableAssignments &assignments, RelianceRuleRelation relation = RelianceRuleRelation::To)
 {
-    for (const Literal &literal : literals)
+    for (int literalIndex = 0; literalIndex < literals.size(); ++literalIndex)
     {
+        const Literal &literal = literals[literalIndex];
+
         for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
         {
             VTerm currentTerm = literal.getTermAtPos(termIndex);
@@ -53,12 +55,12 @@ bool checkUnmappedExistentialVariables(const std::vector<std::reference_wrapper<
 
                 int64_t assignedConstant = assignments.getConstant((int32_t)currentTerm.getId(), relation);
                 if (assignedConstant != NOT_ASSIGNED && assignedConstant < 0)
-                    return false;
+                    return literalIndex;
             }                
         }
     }
 
-    return true;
+    return -1;
 }
 
 bool restrainCheckNullsInBody(const std::vector<Literal> &literals,
@@ -88,7 +90,10 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> &toHeadLiterals = ruleTo.getHeads();
     std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
+    std::vector<unsigned> notMappedHeadIndexes;
     notMappedHeadLiterals.reserve(ruleTo.getHeads().size());
+    notMappedHeadIndexes.reserve(ruleTo.getHeads().size());
+
     for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
     {
         if (headIndex == mappingDomain[nextInDomainIndex])
@@ -102,6 +107,7 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
         }
 
         notMappedHeadLiterals.push_back(toHeadLiterals[headIndex]);
+        notMappedHeadIndexes.push_back(headIndex);
     }
 
     if (!restrainCheckNullsInBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From)
@@ -111,8 +117,20 @@ RelianceCheckResult restrainCheck(std::vector<unsigned> &mappingDomain,
     if (!assignments.hasMappedExistentialVariable)
         return RelianceCheckResult::Extend;
 
-    if (!checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments))
-        return RelianceCheckResult::Extend;
+    int unmappedResult = checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments);
+
+    if (unmappedResult >= 0)
+    {
+        if (notMappedHeadIndexes[unmappedResult] < mappingDomain.back())
+        {
+            return RelianceCheckResult::False;
+        }
+        else
+        {
+            return RelianceCheckResult::Extend;
+        }
+
+    }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;
@@ -384,7 +402,9 @@ RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain,
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> toHeadLiterals = rule.getHeads();
     std::vector<std::reference_wrapper<const Literal>> notMappedHeadLiterals;
+    std::vector<unsigned> notMappedHeadIndexes;
     notMappedHeadLiterals.reserve(rule.getHeads().size());
+    notMappedHeadIndexes.reserve(rule.getHeads().size());
     for (unsigned headIndex = 0; headIndex < toHeadLiterals.size(); ++headIndex)
     {
         if (headIndex == mappingDomain[nextInDomainIndex])
@@ -398,6 +418,7 @@ RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain,
         }
 
         notMappedHeadLiterals.push_back(toHeadLiterals[headIndex]);
+        notMappedHeadIndexes.push_back(headIndex);
     }
 
     if (!restrainCheckNullsInBody(rule.getBody(), assignments, RelianceRuleRelation::From))
@@ -406,8 +427,19 @@ RelianceCheckResult selfRestrainCheck(std::vector<unsigned> &mappingDomain,
     if (!selfRestrainIsNullReducing(rule, assignments))
         return RelianceCheckResult::False;
 
-    if (!checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments, RelianceRuleRelation::From))
-        return RelianceCheckResult::Extend;
+    int unmappedResult = checkUnmappedExistentialVariables(notMappedHeadLiterals, assignments, RelianceRuleRelation::From);
+
+    if (unmappedResult >= 0)
+    {
+        if (notMappedHeadIndexes[unmappedResult] < mappingDomain.back())
+        {
+            return RelianceCheckResult::False;
+        }
+        else
+        {
+            return RelianceCheckResult::Extend;
+        }
+    }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;
     std::vector<unsigned> satisfied;

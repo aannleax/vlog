@@ -58,11 +58,13 @@ bool positiveExtendAssignment(const Literal &literalFrom, const Literal &literal
 }
 
 template<typename T>
-bool positiveCheckNullsInToBody(const std::vector<T> &literals,
+int positiveCheckNullsInToBody(const std::vector<T> &literals,
     const VariableAssignments &assignments, RelianceRuleRelation relation)
 {
-    for (const Literal &literal : literals)
+    for (int literalIndex = 0; literalIndex < literals.size(); ++literalIndex)
     {
+        const Literal &literal = literals[literalIndex];
+
         for (unsigned termIndex = 0; termIndex < literal.getTupleSize(); ++termIndex)
         {
             VTerm currentTerm = literal.getTermAtPos(termIndex);
@@ -70,12 +72,12 @@ bool positiveCheckNullsInToBody(const std::vector<T> &literals,
             if ((int32_t)currentTerm.getId() > 0)
             {
                 if (assignments.getConstant((int32_t)currentTerm.getId(), relation) < 0)
-                    return false;
+                    return literalIndex;
             }
         }
     }   
 
-    return true;
+    return -1;
 }
 
 bool positiveExtend(std::vector<unsigned> &mappingDomain, 
@@ -83,14 +85,22 @@ bool positiveExtend(std::vector<unsigned> &mappingDomain,
     VariableAssignments &assignments,
     RelianceStrategy strat);
 
+std::vector<std::reference_wrapper<const Literal>> notMappedToBodyLiterals;
+std::vector<unsigned> notMappedToBodyIndexes;
+
 RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain, 
     const Rule &ruleFrom, const Rule &ruleTo,
     const VariableAssignments &assignments)
 {
     unsigned nextInDomainIndex = 0;
     const std::vector<Literal> &toBodyLiterals = ruleTo.getBody();
-    std::vector<std::reference_wrapper<const Literal>> notMappedToBodyLiterals;
+    
+    notMappedToBodyLiterals.clear();
+    notMappedToBodyIndexes.clear();
+    
     notMappedToBodyLiterals.reserve(toBodyLiterals.size());
+    notMappedToBodyIndexes.reserve(toBodyLiterals.size());
+    
     for (unsigned bodyIndex = 0; bodyIndex < toBodyLiterals.size(); ++bodyIndex)
     {
         if (bodyIndex == mappingDomain[nextInDomainIndex])
@@ -104,16 +114,26 @@ RelianceCheckResult positiveCheck(std::vector<unsigned> &mappingDomain,
         }
 
         notMappedToBodyLiterals.push_back(toBodyLiterals[bodyIndex]);
+        notMappedToBodyIndexes.push_back(bodyIndex);
     }
 
-    if (!positiveCheckNullsInToBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From))
+    if (positiveCheckNullsInToBody(ruleFrom.getBody(), assignments, RelianceRuleRelation::From) >= 0)
     {
         return RelianceCheckResult::False;
     }
 
-    if (!positiveCheckNullsInToBody(notMappedToBodyLiterals, assignments, RelianceRuleRelation::To))
+    int unmappedResult = positiveCheckNullsInToBody(notMappedToBodyLiterals, assignments, RelianceRuleRelation::To);
+
+    if (unmappedResult >= 0)
     {
-        return RelianceCheckResult::Extend;
+        if (notMappedToBodyIndexes[unmappedResult] < mappingDomain.back())
+        {
+            return RelianceCheckResult::False;
+        }
+        else
+        {
+            return RelianceCheckResult::Extend;
+        }
     }
 
     std::vector<std::vector<std::unordered_map<int64_t, TermInfo>>> existentialMappings;

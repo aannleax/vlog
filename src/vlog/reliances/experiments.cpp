@@ -269,6 +269,13 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
         positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
     }
 
+    std::vector<std::string> ruleStrings;
+    ruleStrings.reserve(allOriginalRules.size());
+    for (const Rule &currentRule : allOriginalRules)
+    {
+        ruleStrings.push_back(currentRule.toprettystring(&initialProgram, &edbLayer));
+    }
+
     auto cycleStart = std::chrono::system_clock::now();
     bool result = true;
     
@@ -292,7 +299,7 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
                 if (currentRule.isExistential())
                     containsExisitential = true;
 
-                currentProgram.readFromString(currentRule.toprettystring(&initialProgram, &edbLayer), false);
+                currentProgram.readFromString(ruleStrings[ruleIndex], false);
                 //currentProgram.addRule(currentRule.getHeads(), currentRule.getBody());
             }
 

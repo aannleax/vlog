@@ -289,7 +289,10 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
             int checkResult = Checker::check(currentProgram, algorithm, edbLayer);
         
             if (checkResult == 0)
+            {
                 result = false;
+                break;
+            }
         }
     }
     else

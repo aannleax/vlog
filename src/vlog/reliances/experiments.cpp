@@ -189,10 +189,18 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
     std::cout << "Longest-Pair-Restraint: " << restrainResult.longestPairString << '\n';
     std::cout << "Longest-Overall: " << (positiveResult.timeLongestPairMicro + restrainResult.timeLongestPairMicro) / 1000.0 << '\n';
 
-    if (!timeout)
+    if (!positiveResult.timeout)
     {
         std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << '\n';
+    }   
+
+    if (!restrainResult.timeout)
+    {
         std::cout << "Time-Restraint: " << restrainResult.timeMilliSeconds << '\n';
+    } 
+
+    if (!timeout)
+    {
         std::cout << "Time-Overall: " << positiveResult.timeMilliSeconds + restrainResult.timeMilliSeconds << '\n';
 
         std::pair<SimpleGraph, SimpleGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
@@ -261,6 +269,13 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
         positiveGroupsResult = computeRelianceGroups(positiveGraphs.first, positiveGraphs.second);    
     }
 
+    std::vector<std::string> ruleStrings;
+    ruleStrings.reserve(allOriginalRules.size());
+    for (const Rule &currentRule : allOriginalRules)
+    {
+        ruleStrings.push_back(currentRule.toprettystring(&initialProgram, &edbLayer));
+    }
+
     auto cycleStart = std::chrono::system_clock::now();
     bool result = true;
     
@@ -271,22 +286,27 @@ void experimentCycles(const std::string &rulesPath, const std::string &algorithm
             if (group.size() == 1 && !positiveResult.graphs.first.containsEdge(group[0], group[0]))
                 continue;
 
-            Program currentProgram(&edbLayer);
+            EDBConf currentEmptyConf("", false);
+            EDBLayer currentEdbLayer(emptyConf, false);
+
+            Program currentProgram(&currentEdbLayer);
             bool containsExisitential = false;
             for (unsigned ruleIndex : group)
+            //for (unsigned ruleIndex = 0; ruleIndex < allOriginalRules.size(); ++ruleIndex)
             {
                 const Rule &currentRule = allOriginalRules[ruleIndex];
 
                 if (currentRule.isExistential())
                     containsExisitential = true;
 
-                currentProgram.addRule(currentRule.getHeads(), currentRule.getBody());
+                currentProgram.readFromString(ruleStrings[ruleIndex], false);
+                //currentProgram.addRule(currentRule.getHeads(), currentRule.getBody());
             }
 
             if (!containsExisitential)
                 continue;
 
-            int checkResult = Checker::check(currentProgram, algorithm, edbLayer);
+            int checkResult = Checker::check(currentProgram, algorithm, currentEdbLayer);
         
             if (checkResult == 0)
             {

@@ -174,6 +174,11 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
     RelianceComputationResult positiveResult = computePositiveReliances(allRules, strat, timeoutMilliSeconds);
     std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
 
+     if (!positiveResult.timeout)
+    {
+        std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << '\n';
+    }   
+
     RelianceComputationResult restrainResult = computeRestrainReliances(allRules, strat, timeoutMilliSeconds);
     std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = restrainResult.graphs;
     
@@ -187,12 +192,7 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
     std::cout << "Longest-Pair-Positive: " << positiveResult.longestPairString << '\n';
     std::cout << "Longest-Restraint: " << restrainResult.timeLongestPairMicro / 1000.0 << '\n';
     std::cout << "Longest-Pair-Restraint: " << restrainResult.longestPairString << '\n';
-    std::cout << "Longest-Overall: " << (positiveResult.timeLongestPairMicro + restrainResult.timeLongestPairMicro) / 1000.0 << '\n';
-
-    if (!positiveResult.timeout)
-    {
-        std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << '\n';
-    }   
+    std::cout << "Longest-Overall: " << (positiveResult.timeLongestPairMicro + restrainResult.timeLongestPairMicro) / 1000.0 << '\n';   
 
     if (!restrainResult.timeout)
     {
@@ -385,4 +385,5 @@ void experimentGRD(const std::string &rulesPath, unsigned timeoutMilliSeconds)
     std::cout << "Acyclic: " << (isAcyclic ? "1" : "0") << '\n';
     std::cout << "NumberOfEdges: " << totalNumberOfEdges << '\n';
     std::cout << "Time: " << timeMilliSeconds << " ms" << '\n'; 
+    std::cout << "Time-Positive" << positiveResult.timeMilliSeconds << " ms" << '\n';
 }

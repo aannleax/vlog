@@ -388,5 +388,5 @@ void experimentGRD(const std::string &rulesPath, unsigned timeoutMilliSeconds)
     std::cout << "Acyclic: " << (isAcyclic ? "1" : "0") << '\n';
     std::cout << "NumberOfEdges: " << totalNumberOfEdges << '\n';
     std::cout << "Time: " << timeMilliSeconds << " ms" << '\n'; 
-    std::cout << "Time-Positive" << positiveResult.timeMilliSeconds << " ms" << '\n';
+    std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << " ms" << '\n';
 }

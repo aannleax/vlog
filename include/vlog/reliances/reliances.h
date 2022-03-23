@@ -64,6 +64,49 @@ struct SimpleGraph
         }
     }
 
+    std::pair<SimpleGraph, SimpleGraph> loadAndTransposed(const std::string &filename) const
+    {
+        SimpleGraph result, resultTransposed;
+
+        std::ifstream fileStream(filename);
+
+        unsigned maxNode = 0;
+
+        std::string line;
+        while (std::getline(fileStream, line))
+        {
+            if (line.length() == 0)
+                continue;
+
+            size_t commaPos = line.find(',');
+            if (commaPos == std::string::npos)
+                continue;
+
+            unsigned fromNode = std::stoi(line.substr(0, commaPos));
+            unsigned toNode = std::stoi(line.substr(commaPos + 1, line.length() - commaPos - 1));
+            
+            if (fromNode > maxNode)
+                maxNode = fromNode;
+
+            if (toNode > maxNode)
+                maxNode = toNode;
+            
+            result.edges.resize(maxNode);
+            resultTransposed.edges.resize(maxNode);
+
+            for (unsigned index = result.nodes.size(); index <= maxNode; ++index)
+            {
+                result.nodes.push_back(index);
+                resultTransposed.nodes.push_back(index);
+            }
+
+            result.addEdge(fromNode, toNode);
+            resultTransposed.addEdge(toNode, fromNode);
+        }
+
+        return std::make_pair(result, resultTransposed);
+    }
+
     bool containsEdge(size_t from, size_t to) const
     {
         if (edges[from].size() > 0)

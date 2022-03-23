@@ -351,6 +351,10 @@ bool initParams(int argc, const char** argv, ProgramArgs &vm) {
             "Determines if rules should be split into positive groups (true per default)", false);
     rel_options.add<bool>("", "printCycles", false,
             "Prints restraining-cycle.", false);
+    rel_options.add<bool>("", "allCycles", false,
+            "Prints all restraining-cycle.", false);
+    rel_options.add<bool>("", "saveGraphs", false,
+            "Saves computed reliance graphs.", false);
     rel_options.add<bool>("", "grd", false,
             "Runs GRD experiment", false);
     
@@ -728,6 +732,8 @@ void launchRelianceComputation(ProgramArgs &vm) {
     std::string algorithm = vm["alg"].as<string>();
     bool printCycles = vm["printCycles"].as<bool>();
     bool isGRD = vm["grd"].as<bool>();
+    bool allCycles = vm["allCycles"].as<bool>();
+    bool saveGraphs = vm["saveGraphs"].as<bool>();
 
     if (isTest)
     {
@@ -741,9 +747,13 @@ void launchRelianceComputation(ProgramArgs &vm) {
     {
         experimentGRD(pathRules, timeout);
     }
+    else if (allCycles)
+    {
+        printAllCyclesOWL(pathRules);
+    }
     else
     {
-        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy, (unsigned)timeout, printCycles);
+        experimentCoreStratified(pathRules, pieceDecomposition, (RelianceStrategy)strategy, (unsigned)timeout, printCycles, saveGraphs);
     }
 }
 

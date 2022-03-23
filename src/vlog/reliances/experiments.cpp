@@ -1,6 +1,5 @@
 #include <vlog/reliances/experiments.h>
 
-
 SimpleGraph createSubgraph(const SimpleGraph &originalGraph, std::vector<unsigned> component)
 {
     SimpleGraph result(originalGraph.numberOfInitialNodes);
@@ -137,7 +136,7 @@ void printShortestCycle(const SimpleGraph &positiveGraph, const SimpleGraph &pos
     }
 }
 
-void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds, bool printCycles)
+void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposition, RelianceStrategy strat, unsigned timeoutMilliSeconds, bool printCycles, bool saveGraphs)
 {
     std::cout << "Launched coreStratified experiment with parameters " << '\n';
     std::cout << "\t" << "Path: " << rulesPath << '\n';
@@ -201,6 +200,12 @@ void experimentCoreStratified(const std::string &rulesPath, bool pieceDecomposit
 
     if (!timeout)
     {
+        if (saveGraphs)
+        {
+            positiveGraphs.first.saveCSV(rulesPath + ".pos");
+            restrainingGraphs.first.saveCSV(rulesPath + ".res");
+        }
+
         std::cout << "Time-Overall: " << positiveResult.timeMilliSeconds + restrainResult.timeMilliSeconds << '\n';
 
         std::pair<SimpleGraph, SimpleGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
@@ -389,4 +394,253 @@ void experimentGRD(const std::string &rulesPath, unsigned timeoutMilliSeconds)
     std::cout << "NumberOfEdges: " << totalNumberOfEdges << '\n';
     std::cout << "Time: " << timeMilliSeconds << " ms" << '\n'; 
     std::cout << "Time-Positive: " << positiveResult.timeMilliSeconds << " ms" << '\n';
+}
+
+void printAllCyclesOWL(const std::string &inputPath)
+{
+    const std::string postfix = ".owl.rules";
+    const std::string postfixPos = "pos";
+    const std::string postfixRes = "res";
+    const unsigned fileMax = 797;
+    const unsigned filenameLength = 5;
+
+    struct RuleComponent {
+        std::vector<Rule> rules;
+        SimpleGraph positiveGraph, restraintGraph;
+    };
+
+    auto literalsSameForm = [&] (const vector<Literal> &literalsA, const vector<Literal> &literalsB) -> bool {
+        if (literalsA.size() != literalsB.size())
+            return false;
+    
+        for (int literalIndex = 0; literalIndex < literalsA.size(); ++literalIndex)
+        {
+            const Literal &literalA = literalsA[literalIndex];
+            const Literal &literalB = literalsB[literalIndex];
+
+            for (unsigned termIndex = 0; termIndex < literalA.getTupleSize(); ++termIndex)
+            {
+                VTerm currentTermA = literalA.getTermAtPos(termIndex);
+                VTerm currentTermB = literalB.getTermAtPos(termIndex);
+
+                if (currentTermA != currentTermB)
+                    return false;
+            }
+        }   
+
+        return true;
+    };
+
+    auto rulesSameForm = [&] (const Rule &ruleA, const Rule &ruleB) -> bool {
+        return literalsSameForm(ruleA.getBody(), ruleB.getBody()) 
+            && literalsSameForm(ruleA.getHeads(), ruleB.getHeads());
+    };
+
+    auto remapGraph = [] (const std::vector<Rule> &rules, const SimpleGraph &graph) -> SimpleGraph {
+        std::unordered_map<unsigned, unsigned> ruleMapping;
+
+        for (unsigned ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+        {
+            ruleMapping[rules[ruleIndex].getId()] = ruleIndex;
+        }
+
+        SimpleGraph result(rules.size());
+
+        for (unsigned ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+        {
+            for (unsigned successor : graph.edges[rules[ruleIndex].getId()])
+            {
+                if (ruleMapping.find(successor) != ruleMapping.end())
+                    result.addEdge(ruleIndex, ruleMapping[successor]);
+            }
+        }
+
+        return result;
+    };
+
+    auto sameSuccessors = [&] (
+        unsigned ruleAIndex, unsigned ruleBIndex,
+        const SimpleGraph &graphA, const SimpleGraph &graphB,
+        const std::vector<Rule> &rulesA, const std::vector<Rule> &rulesB) -> bool {
+
+        if (graphA.edges[ruleAIndex].size() != graphB.edges[ruleBIndex].size())
+            return false;
+
+        for (unsigned ruleASuccessorIndex : graphA.edges[ruleAIndex])
+        {
+            bool found = false;
+
+            for (unsigned ruleBSuccessorIndex : graphB.edges[ruleBIndex])
+            {
+                if (rulesSameForm(rulesA[ruleASuccessorIndex], rulesB[ruleBSuccessorIndex]))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+                return false;
+        }
+
+        for (unsigned ruleBSuccessorIndex : graphB.edges[ruleBIndex])
+        {
+            bool found = false;
+
+            for (unsigned ruleASuccessorIndex : graphA.edges[ruleAIndex])
+            {
+                if (rulesSameForm(rulesA[ruleASuccessorIndex], rulesB[ruleBSuccessorIndex]))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+                return false;
+        }
+
+        return true;
+    };
+
+    auto componentSameForm = [&] (const RuleComponent &componentA, 
+        const std::vector<unsigned> componentBIndizes, const std::vector<Rule> &allRulesB,
+        const SimpleGraph &positiveReliancesB, const SimpleGraph &restraintReliancesB) -> bool {
+        
+        if (componentA.rules.size() != componentBIndizes.size())
+            return false;
+
+        for (unsigned ruleAIndex = 0; ruleAIndex < componentA.rules.size(); ++ruleAIndex)
+        {
+            const Rule &ruleA = componentA.rules[ruleAIndex];
+
+            bool foundMatch = false;
+            for (unsigned ruleBIndex : componentBIndizes)
+            {
+                const Rule &ruleB = allRulesB[ruleBIndex];
+
+                if (!rulesSameForm(ruleA, ruleB))
+                    continue;
+                
+                if (!sameSuccessors(ruleAIndex, ruleBIndex, 
+                    componentA.positiveGraph, positiveReliancesB,
+                    componentA.rules, allRulesB))
+                    continue;
+
+                if (!sameSuccessors(ruleAIndex, ruleBIndex, 
+                    componentA.restraintGraph, restraintReliancesB,
+                    componentA.rules, allRulesB))
+                    continue;
+
+                foundMatch = true;
+                break;
+            }
+
+            if (!foundMatch)
+                return false;
+        }
+
+        return true;
+    };
+
+    std::vector<RuleComponent> allComponents;
+
+    for (unsigned fileNumber = 0; fileNumber <= fileMax; ++fileNumber)
+    {
+        std::string filename = std::to_string(fileNumber);
+        while (filename.size() < filenameLength)
+        {
+            filename.insert(filename.begin(), '0');
+        }
+
+        std::string filePath = inputPath + "/" + filename + postfix;
+
+        std::ifstream fileStream(filePath);
+        if (!fileStream.good())
+            continue;
+
+        EDBConf emptyConf("", false);
+        EDBLayer edbLayer(emptyConf, false);
+
+        Program program(&edbLayer);
+        std::string errorString = program.readFromFile(filePath, false);
+        if (!errorString.empty()) {
+            continue;
+        }
+
+        const std::vector<Rule> &allOriginalRules = program.getAllRules();
+
+        std::vector<Rule> allRules;
+
+        for (const Rule &currentRule : allOriginalRules)
+        {
+            splitIntoPieces(currentRule, allRules);
+        }
+
+        // RelianceComputationResult positiveResult = computePositiveReliances(allRules, RelianceStrategy::Full, 0);
+        // RelianceComputationResult restrainResult = computeRestrainReliances(allRules, RelianceStrategy::Full, 0);
+        // std::pair<SimpleGraph, SimpleGraph> positiveGraphs = positiveResult.graphs;
+        // std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = restrainResult.graphs;
+
+        std::pair<SimpleGraph, SimpleGraph> positiveGraphs = SimpleGraph::loadAndTransposed(filePath + postfixPos);
+        std::pair<SimpleGraph, SimpleGraph> restrainingGraphs = SimpleGraph::loadAndTransposed(filePath + postfixRes);
+
+        std::pair<SimpleGraph, SimpleGraph> unionGraphs = combineGraphs(positiveGraphs.first, restrainingGraphs.first);
+        RelianceGroupResult groupResult = computeRelianceGroups(unionGraphs.first, unionGraphs.second);
+
+        for (const std::vector<unsigned> &group : groupResult.groups)
+        {
+            if (group.size() <= 1)
+                continue;
+
+            bool alreadyPresent = false;
+            for (const RuleComponent &presentComponent : allComponents)
+            {
+                if (componentSameForm(presentComponent, group, allRules, positiveGraphs.first, restrainingGraphs.first))
+                {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+
+            if (!alreadyPresent)
+            {
+                RuleComponent newComponent;
+                for (unsigned ruleIndex : group)
+                {
+                    newComponent.rules.push_back(allRules[ruleIndex]);
+                }
+
+                newComponent.positiveGraph = remapGraph(newComponent.rules, positiveGraphs.first);
+                newComponent.restraintGraph = remapGraph(newComponent.rules, restrainingGraphs.first);
+
+                allComponents.push_back(newComponent);
+            }
+        }
+    }
+
+    auto componentSortFunction = [] (const RuleComponent &componentA, const RuleComponent &componentB) -> bool {
+        return componentA.rules.size() < componentB.rules.size();
+    };
+
+    std::sort(allComponents.begin(), allComponents.end(), componentSortFunction);
+
+    auto componentToString = [] (const RuleComponent &component) -> std::string {
+        std::string result;
+
+        for (const Rule &rule : component.rules)
+        {
+            result += rule.tostring() + '\n';
+        }
+
+        return result;
+    };
+
+    std::cout << "Number of components: " << allComponents.size() << std::endl;
+
+    for (const RuleComponent &ruleComponent : allComponents)
+    {
+        std::cout << "---------------------------" << std::endl;
+        std::cout << componentToString(ruleComponent) << std::endl;
+    }
 }
